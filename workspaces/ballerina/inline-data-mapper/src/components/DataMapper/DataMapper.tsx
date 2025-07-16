@@ -52,6 +52,7 @@ import {
 import { SubMappingNodeInitVisitor } from "../../visitors/SubMappingNodeInitVisitor";
 import { SubMappingConfigForm } from "./SidePanel/SubMappingConfig/SubMappingConfigForm";
 import { ClausesPanel } from "./SidePanel/QueryClauses/ClausesPanel";
+import { useRpcContext } from "@wso2/ballerina-rpc-client";
 
 const classes = {
     root: css({
@@ -119,6 +120,7 @@ export function InlineDataMapper(props: InlineDataMapperProps) {
     const { isSMConfigPanelOpen } = useDMSubMappingConfigPanelStore((state) => state.subMappingConfig);
 
     const { resetSearchStore } = useDMSearchStore();
+    const { rpcClient } = useRpcContext();
 
     const addView = useCallback((view: View) => {
         dispatch({ type: ActionType.ADD_VIEW, payload: { view } });
@@ -247,6 +249,11 @@ export function InlineDataMapper(props: InlineDataMapperProps) {
         setErrorKind(kind);
     };
 
+    const autoMapWithAI = async () => {
+        rpcClient.getAiPanelRpcClient()
+            .openInlineMappingChat(modelState.model);
+    };
+
     return (
         <DataMapperErrorBoundary hasError={hasInternalError} onClose={onClose}>
             <div className={classes.root}>
@@ -256,6 +263,7 @@ export function InlineDataMapper(props: InlineDataMapperProps) {
                         switchView={switchView}
                         hasEditDisabled={false}
                         onClose={handleOnClose}
+                        autoMapWithAI={autoMapWithAI}
                     />
                 )}
                 {errorKind && <IOErrorComponent errorKind={errorKind} classes={classes} />}

@@ -20,7 +20,7 @@ import React from "react";
 import styled from "@emotion/styled";
 import AIChatInput, { AIChatInputRef, TagOptions } from "../../AIChatInput";
 import { Input } from "../../AIChatInput/utils/inputUtils";
-import { AIPanelPrompt, Attachment, TemplateId } from "@wso2/ballerina-core";
+import { AIPanelPrompt, Attachment, ExpandedDMModel, TemplateId } from "@wso2/ballerina-core";
 import { commandTemplates, suggestedCommandTemplates } from "../../../commandTemplates/data/commandTemplates.const";
 import { AttachmentOptions } from "../../AIChatInput/hooks/useAttachments";
 import { getTemplateTextById } from "../../../commandTemplates/utils/utils";
@@ -74,7 +74,7 @@ type FooterProps = {
     tagOptions: TagOptions;
     attachmentOptions: AttachmentOptions;
     inputPlaceholder: string;
-    onSend: (content: { input: Input[]; attachments: Attachment[] }) => Promise<void>;
+    onSend: (content: { input: Input[]; attachments: Attachment[]; model?: Map<any, any> }) => Promise<void>;
     onStop: () => void;
     isLoading: boolean;
     showSuggestedCommands: boolean;

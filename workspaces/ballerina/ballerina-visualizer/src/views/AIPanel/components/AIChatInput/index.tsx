@@ -19,7 +19,7 @@
 import { useState, useRef, KeyboardEvent, useEffect, useLayoutEffect, useImperativeHandle, forwardRef } from "react";
 import styled from "@emotion/styled";
 import { Codicon } from "@wso2/ui-toolkit";
-import { AIPanelPrompt, Attachment, AttachmentStatus, Command, TemplateId } from "@wso2/ballerina-core";
+import { AIPanelPrompt, Attachment, AttachmentStatus, Command, ExpandedDMModel, TemplateId } from "@wso2/ballerina-core";
 import AttachmentBox, { AttachmentsContainer } from "../AttachmentBox";
 import { StyledInputComponent, StyledInputRef } from "./StyledInput";
 import { AttachmentOptions, useAttachments } from "./hooks/useAttachments";
@@ -122,7 +122,7 @@ interface AIChatInputProps {
     tagOptions: TagOptions;
     attachmentOptions: AttachmentOptions;
     placeholder: string;
-    onSend: (content: { input: Input[]; attachments: Attachment[] }) => Promise<void>;
+    onSend: (content: { input: Input[]; attachments: Attachment[]; model?: Map<any, any> }) => Promise<void>;
     onStop: () => void;
     isLoading: boolean;
 }
@@ -487,7 +487,10 @@ const AIChatInput = forwardRef<AIChatInputRef, AIChatInputProps>(
             const filteredAttachments = attachments.filter(
                 (attachment) => attachment.status === AttachmentStatus.Success
             );
-            onSend({ input: input, attachments: filteredAttachments });
+            const model = pendingInputContentRef.current?.type === 'command-template'
+                ? pendingInputContentRef.current.model
+                : undefined;
+            onSend({ input: input, attachments: filteredAttachments, model: model });
             cleanChatInput();
         };
 

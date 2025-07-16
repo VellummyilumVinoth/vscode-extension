@@ -20,12 +20,13 @@
 import { NodePosition } from "@wso2/syntax-tree";
 import { AIMachineContext, AIMachineStateValue } from "../../state-machine-types";
 import { Command, TemplateId } from "../../interfaces/ai-panel";
+import { ExpandedDMModel } from "../../interfaces/inline-data-mapper";
 
 // ==================================
 // General Interfaces
 // ==================================
 export type AIPanelPrompt =
-    | { type: 'command-template'; command: Command; templateId: TemplateId; text?: string; params?: Map<string, string>; }
+    | { type: 'command-template'; command: Command; templateId: TemplateId; text?: string; params?: Map<string, string>; model?: Map<any, any>; }
     | { type: 'text'; text: string }
     | undefined;
 

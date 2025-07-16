@@ -32,6 +32,7 @@ import {
     AIPanelPrompt,
     Command,
     TemplateId,
+    ExpandedDMModel,
 } from "@wso2/ballerina-core";
 
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
@@ -388,7 +389,7 @@ const AIChat: React.FC = () => {
         }
     }
 
-    async function handleSend(content: { input: Input[]; attachments: Attachment[] }) {
+    async function handleSend(content: { input: Input[]; attachments: Attachment[]; model?: Map<any, any>}) {
         setCurrentGeneratingPromptIndex(otherMessages.length);
         setIsPromptExecutedInCurrentWindow(true);
         setFeedbackGiven(null);
@@ -424,10 +425,11 @@ const AIChat: React.FC = () => {
         }, message);
     }
 
-    async function processContent(content: { input: Input[]; attachments: Attachment[] }) {
+    async function processContent(content: { input: Input[]; attachments: Attachment[]; model?: Map<any, any> }) {
         const inputText = stringifyInputArrayWithBadges(content.input);
         const parsedInput = parseInput(content.input, commandTemplates);
         const attachments = content.attachments;
+        let model = content.model;
 
         if (parsedInput && "type" in parsedInput && parsedInput.type === "error") {
             throw new Error(parsedInput.message);
@@ -555,6 +557,13 @@ const AIChat: React.FC = () => {
                                     outputRecord: "",
                                     functionName: parsedInput.placeholderValues.functionName,
                                 },
+                                attachments
+                            );
+                            break;
+                        case "inline-mappings":
+                            await processInlineMappingParameters(
+                                inputText,
+                                model,
                                 attachments
                             );
                             break;
@@ -1707,6 +1716,13 @@ const AIChat: React.FC = () => {
         });
         addChatEntry("user", message);
         addChatEntry("assistant", assistant_response);
+    }
+
+    async function processInlineMappingParameters(message: string, model: Map<string,any>, attachments: Attachment[],) {
+        let assistant_response = "";
+        setIsLoading(true);
+        let filePath = "types.bal";
+        console.log("Model", model);
     }
 
     async function processContextTypeCreation(message: string, attachments: Attachment[]) {

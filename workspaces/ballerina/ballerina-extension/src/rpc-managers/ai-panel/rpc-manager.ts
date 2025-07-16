@@ -30,6 +30,7 @@ import {
     DeveloperDocument,
     DiagnosticEntry,
     Diagnostics,
+    ExpandedDMModel,
     FetchDataRequest,
     FetchDataResponse,
     GenerateMappingFromRecordResponse,
@@ -48,7 +49,6 @@ import {
     ProjectModule,
     ProjectSource,
     RequirementSpecification,
-    STModification,
     SourceFile,
     SubmitFeedbackRequest,
     SyntaxTree,
@@ -65,7 +65,6 @@ import path from "path";
 import { parse } from 'toml';
 import { Uri, commands, window, workspace } from 'vscode';
 
-import { writeFileSync } from "fs";
 import { isNumber } from "lodash";
 import { URI } from "vscode-uri";
 import { AIStateMachine } from "../../../src/views/ai-panel/aiMachine";
@@ -78,6 +77,7 @@ import { getLLMDiagnosticArrayAsString, handleChatSummaryFailure } from "../../f
 import { StateMachine, updateView } from "../../stateMachine";
 import { getAccessToken, getRefreshedAccessToken, loginGithubCopilot } from "../../utils/ai/auth";
 import { modifyFileContent, writeBallerinaFileDidOpen } from "../../utils/modification";
+import { updateSourceCode } from "../../utils/source-utils";
 import { PARSING_ERROR, UNKNOWN_ERROR } from "../../views/ai-panel/errorCodes";
 import {
     DEVELOPMENT_DOCUMENT,
@@ -89,7 +89,6 @@ import {
 import { attemptRepairProject, checkProjectDiagnostics } from "./repair-utils";
 import { cleanDiagnosticMessages, handleStop, isErrorCode, requirementsSpecification, searchDocumentation } from "./utils";
 import { fetchData } from "./utils/fetch-data-utils";
-import { updateSourceCode } from "../../utils/source-utils";
 
 export let hasStopped: boolean = false;
 
@@ -795,6 +794,17 @@ export class AiPanelRpcManager implements AIPanelAPI {
                 resolve(false);
             }
         });
+    }
+
+    async openInlineMappingChat(params: ExpandedDMModel): Promise<void> {
+        commands.executeCommand("ballerina.close.ai.panel");
+        commands.executeCommand("ballerina.open.ai.panel", {
+            type: 'command-template',
+            command: Command.DataMap,
+            templateId: TemplateId.InlineMappings,
+            model: params
+        });
+        console.log("Generating inline mappings with model:", params);
     }
 }
 
