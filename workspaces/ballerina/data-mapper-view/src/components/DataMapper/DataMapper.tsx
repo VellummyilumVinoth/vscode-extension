@@ -396,13 +396,6 @@ export function DataMapperC(props: DataMapperViewProps) {
         rpcClient.getAiPanelRpcClient().generateMappings({position: fnST.position, filePath});
     };
 
-    const stopAutoMap = async (): Promise<boolean> => {
-        const ai = rpcClient.getAiPanelRpcClient();
-        setAutoMapInProgress(false);
-        await ai.stopAIMappings();
-        return true;
-    }
-
     useEffect(() => {
         if (fnST) {
             const defaultSt = { stNode: fnST, fieldPath: fnST.functionName.value };
@@ -583,22 +576,6 @@ export function DataMapperC(props: DataMapperViewProps) {
                                 <div className={dMSupported ? classes.overlay : classes.dmUnsupportedOverlay} />
                             </>
                         }
-                        {autoMapInProgress && (
-                            <div className={classes.overlayWithLoader}>
-                                <VSCodeProgressRing />
-                                <div className={classes.autoMapInProgressMsg}>
-                                    { AUTO_MAP_IN_PROGRESS_MSG }
-                                </div>
-                                <Button
-                                    onClick={stopAutoMap}
-                                    appearance="secondary"
-                                    className={classes.autoMapStopButton}
-                                >
-                                    <Codicon sx={{ marginRight: 5 }} name="stop-circle" />
-                                    {"Stop"}
-                                </Button>
-                        </div>
-                        )}
                         {fnST && (
                             <DataMapperHeader
                                 selection={selection}
