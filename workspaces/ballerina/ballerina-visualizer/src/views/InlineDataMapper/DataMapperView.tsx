@@ -31,7 +31,8 @@ import {
     IDMViewState,
     IntermediateClause,
     TriggerCharacter,
-    TRIGGER_CHARACTERS
+    TRIGGER_CHARACTERS,
+    Mapping
 } from "@wso2/ballerina-core";
 import { CompletionItem, ProgressIndicator } from "@wso2/ui-toolkit";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
@@ -263,7 +264,8 @@ export function InlineDataMapperView(props: InlineDataMapperProps) {
                 index,
                 targetField,
                 subMappingName,
-                type
+                type,
+                varName
             );
             
             console.log(">>> [Inline Data Mapper] addSubMapping request:", request);
@@ -272,6 +274,24 @@ export function InlineDataMapperView(props: InlineDataMapperProps) {
                 .getInlineDataMapperRpcClient()
                 .addSubMapping(request);
             console.log(">>> [Inline Data Mapper] addSubMapping response:", response);
+        } catch (error) {
+            console.error(error);
+            setIsFileUpdateError(true);
+        }
+    };
+
+    const deleteMapping = async (mapping: Mapping, viewId: string) => {
+        try {
+            const resp = await rpcClient
+                .getInlineDataMapperRpcClient()
+                .deleteMapping({
+                    filePath,
+                    codedata,
+                    mapping,
+                    varName,
+                    targetField: viewId,
+                });
+            console.log(">>> [Inline Data Mapper] deleteMapping response:", resp);
         } catch (error) {
             console.error(error);
             setIsFileUpdateError(true);
@@ -386,6 +406,7 @@ export function InlineDataMapperView(props: InlineDataMapperProps) {
                     convertToQuery={convertToQuery}
                     addClauses={addClauses}
                     addSubMapping={addSubMapping}
+                    deleteMapping={deleteMapping}
                     expressionBar={{
                         completions: filteredCompletions,
                         triggerCompletions: retrieveCompeletions,

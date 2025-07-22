@@ -231,10 +231,13 @@ import {
     ResourceReturnTypesResponse,
     JsonToTypeRequest,
     JsonToTypeResponse,
+    FunctionFromSourceRequest,
+    FunctionFromSourceResponse,
     GetInlineDataMapperCodedataRequest,
     GetInlineDataMapperCodedataResponse,
     GetSubMappingCodedataRequest,
-    AddSubMappingRequest
+    AddSubMappingRequest,
+    DeleteMappingRequest
 } from "@wso2/ballerina-core";
 import { BallerinaExtension } from "./index";
 import { debug, handlePullModuleProgress } from "../utils";
@@ -313,6 +316,7 @@ enum EXTENDED_APIS {
     DATA_MAPPER_CONVERT_TO_QUERY = 'dataMapper/convertToQuery',
     DATA_MAPPER_ADD_CLAUSES = 'dataMapper/addClauses',
     DATA_MAPPER_ADD_SUB_MAPPING = 'dataMapper/addSubMapping',
+    DATA_MAPPER_DELETE_MAPPING = 'dataMapper/deleteMapping',
     DATA_MAPPER_CODEDATA = 'dataMapper/nodePosition',
     DATA_MAPPER_SUB_MAPPING_CODEDATA = 'dataMapper/subMapping',
     DATA_MAPPER_PROPERTY = 'dataMapper/fieldPosition',
@@ -365,6 +369,7 @@ enum EXTENDED_APIS {
     BI_SERVICE_ADD_FUNCTION = 'serviceDesign/addFunction',
     BI_SERVICE_UPDATE_RESOURCE = 'serviceDesign/updateFunction',
     BI_SERVICE_SERVICE_CLASS_MODEL = 'serviceDesign/getServiceClassModelFromSource',
+    BI_GET_FUNCTION_FROM_SOURCE = 'serviceDesign/getFunctionFromSource',
     BI_UPDATE_CLASS_FIELD = 'serviceDesign/updateClassField',
     BI_ADD_CLASS_FIELD = 'serviceDesign/addField',
     BI_DESIGN_MODEL = 'designModelService/getDesignModel',
@@ -695,6 +700,10 @@ export class ExtendedLangClient extends LanguageClient implements ExtendedLangCl
 
     async addSubMapping(params: AddSubMappingRequest): Promise<InlineDataMapperSourceResponse> {
         return this.sendRequest<InlineDataMapperSourceResponse>(EXTENDED_APIS.DATA_MAPPER_ADD_SUB_MAPPING, params);
+    }
+
+    async deleteMapping(params: DeleteMappingRequest): Promise<InlineDataMapperSourceResponse> {
+        return this.sendRequest<InlineDataMapperSourceResponse>(EXTENDED_APIS.DATA_MAPPER_DELETE_MAPPING, params);
     }
 
     async getDataMapperCodedata(params: GetInlineDataMapperCodedataRequest): Promise<GetInlineDataMapperCodedataResponse> {
@@ -1051,6 +1060,10 @@ export class ExtendedLangClient extends LanguageClient implements ExtendedLangCl
 
     async getServiceClassModel(params: ModelFromCodeRequest): Promise<ServiceClassModelResponse> {
         return this.sendRequest<ServiceClassModelResponse>(EXTENDED_APIS.BI_SERVICE_SERVICE_CLASS_MODEL, params);
+    }
+
+    async getFunctionFromSource(params: FunctionFromSourceRequest): Promise<FunctionFromSourceResponse> {
+        return this.sendRequest<FunctionFromSourceResponse>(EXTENDED_APIS.BI_GET_FUNCTION_FROM_SOURCE, params);
     }
 
     async updateClassField(params: ClassFieldModifierRequest): Promise<SourceEditResponse> {
