@@ -1,0 +1,32 @@
+{
+    "student": {
+        "id": {
+            "operation": "DIRECT",
+            "targetType": "int",
+            "parameters": [
+                "A.person.id"
+            ]
+        },
+        "firstName": {
+            "operation": "DIRECT",
+            "targetType": "string",
+            "parameters": [
+                "A.person.firstName"
+            ]
+        },
+        "lastName": {
+            "operation": "DIRECT",
+            "targetType": "string",
+            "parameters": [
+                "A.person.lastName"
+            ]
+        },
+        "age": {
+            "operation": "DIRECT",
+            "targetType": "string",
+            "parameters": [
+                "A.person.age"
+            ]
+        }
+    }
+}

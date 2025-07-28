@@ -31,5 +31,9 @@
         "build:api-designer": "rush build --to api-designer",
         "setup-e2e-test-debug": "workspaces/ballerina/ballerina-extension/node_modules/vscode-extension-tester/out/cli.js get-vscode && workspaces/ballerina/ballerina-extension/node_modules/vscode-extension-tester/out/cli.js get-chromedriver",
         "ui-toolkit-stories": "npm run --prefix ./workspaces/common-libs/ui-toolkit serve-storybook"
+    },
+    "dependencies": {
+        "@ai-sdk/anthropic": "^1.2.12",
+        "ai": "^4.3.19"
     }
 }

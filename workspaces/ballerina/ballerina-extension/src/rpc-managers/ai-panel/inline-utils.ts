@@ -7,18 +7,12 @@
  * You may not alter or remove any copyright or other notice from copies of this content.
  */
 
-import { AIMachineEventType, Attachment, ErrorCode, ExpandedDMModel, FieldConfig, FormField, InlineDataMapperModelResponse, InputCategory, IOType, Mapping, MappingElement, ParameterDefinitions, ParameterField, ParameterMetadata, RecordDefinitonObject, TypeKind } from "@wso2/ballerina-core";
+import { AIMachineEventType, Attachment, ErrorCode, ExpandedDMModel, FieldMetadata, FormField, InlineDataMapperModelResponse, InputCategory, IntermediateMapping, IOType, Mapping, MappingElement, ParameterDefinitions, ParameterField, ParameterMetadata, RecordDefinitonObject, TypeKind } from "@wso2/ballerina-core";
 import { fetchWithTimeout, filterResponse, generateBallerinaCode, isErrorCode, mappingFileInlineDataMapperModel, navigateTypeInfo, REQUEST_TIMEOUT } from "./utils";
 import { getAccessToken, getRefreshedAccessToken } from "../../utils/ai/auth";
 import { NOT_LOGGED_IN, TIMEOUT } from "../../views/ai-panel/errorCodes";
 import { AIStateMachine } from "../../views/ai-panel/aiMachine";
 import { BACKEND_URL } from "../../features/ai/utils";
-
-let abortController = new AbortController();
-
-export function handleStop() {
-    abortController.abort();
-}
 
 function transformIOType(input: IOType): FormField {
     const name = input.variableName || extractNameFromId(input.id);
@@ -99,15 +93,15 @@ function extractNameFromId(id: string): string {
 }
 
 function transformInputs(inputs: IOType[]): {
-    constants: Record<string, FieldConfig>;
-    configurables: Record<string, FieldConfig>;
-    variables: Record<string, FieldConfig>;
+    constants: Record<string, FieldMetadata>;
+    configurables: Record<string, FieldMetadata>;
+    variables: Record<string, FieldMetadata>;
     parameters: ParameterField[];
     parameterFields: { [parameterName: string]: FormField[] }; 
 } {
-    const constants: Record<string, FieldConfig> = {};
-    const configurables: Record<string, FieldConfig> = {};
-    const variables: Record<string, FieldConfig> = {};
+    const constants: Record<string, FieldMetadata> = {};
+    const configurables: Record<string, FieldMetadata> = {};
+    const variables: Record<string, FieldMetadata> = {};
     const parameters: ParameterField[] = [];
     const parameterFields: { [parameterName: string]: FormField[] } = {}; 
 
@@ -150,7 +144,7 @@ function transformInputs(inputs: IOType[]): {
             };
         };
 
-        const createFieldConfig = (input: IOType): FieldConfig => {
+        const createFieldConfig = (input: IOType): FieldMetadata => {
             if (!input.typeName) {
                 throw new Error("TypeName is missing");
             }
@@ -407,7 +401,7 @@ export async function getInlineParamDefinitions(
     };
 }
 
-async function sendInlineDatamapperRequest(inlineDataMapperResponse: InlineDataMapperModelResponse | ErrorCode, accessToken: string | ErrorCode): Promise<Response | ErrorCode> {
+async function sendInlineDatamapperRequest(inlineDataMapperResponse: InlineDataMapperModelResponse, accessToken: string): Promise<Response | ErrorCode> {
     const response = await fetchWithTimeout(BACKEND_URL + "/inline/datamapper", {
         method: "POST",
         headers: {
@@ -422,14 +416,14 @@ async function sendInlineDatamapperRequest(inlineDataMapperResponse: InlineDataM
     return response;
 }
 
-async function getInlineDatamapperCode(inlineDataMapperResponse: InlineDataMapperModelResponse | ErrorCode, parameterDefinitions: ParameterMetadata | ErrorCode): Promise<object | ErrorCode> {
+async function getInlineDatamapperCode(inlineDataMapperResponse: InlineDataMapperModelResponse, parameterDefinitions: ParameterMetadata): Promise<object | ErrorCode> {
     let nestedKeyArray: string[] = [];
     try {
         const accessToken = await getAccessToken().catch((error) => {
             console.error(error);
             return NOT_LOGGED_IN;
         });
-        let response = await sendInlineDatamapperRequest(inlineDataMapperResponse, accessToken);
+        let response = await sendInlineDatamapperRequest(inlineDataMapperResponse, accessToken as string);
         if (isErrorCode(response)) {
             return (response as ErrorCode);
         }
@@ -451,11 +445,17 @@ async function getInlineDatamapperCode(inlineDataMapperResponse: InlineDataMappe
 
             retryResponse = (retryResponse as Response);
             let intermediateMapping = await filterResponse(retryResponse);
-            let finalCode = await generateBallerinaCode(intermediateMapping, parameterDefinitions, "", nestedKeyArray);
+            if (isErrorCode(intermediateMapping)) {
+                return (intermediateMapping as ErrorCode);
+            }
+            let finalCode = await generateBallerinaCode(intermediateMapping as IntermediateMapping, parameterDefinitions, "", nestedKeyArray);
             return finalCode;
         }
         let intermediateMapping = await filterResponse(response);
-        let finalCode = await generateBallerinaCode(intermediateMapping, parameterDefinitions, "", nestedKeyArray);
+        if (isErrorCode(intermediateMapping)) {
+            return (intermediateMapping as ErrorCode);
+        }
+        let finalCode = await generateBallerinaCode(intermediateMapping as IntermediateMapping, parameterDefinitions, "", nestedKeyArray);
         return finalCode;
     } catch (error) {
         console.error(error);

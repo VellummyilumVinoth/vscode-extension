@@ -863,7 +863,7 @@ export const Form = forwardRef((props: FormProps, ref) => {
                                 {cancelText || "Cancel"}{" "}
                             </Button>
                         )}
-                        {canOpenInDataMapper &&
+                        {
                             <Button
                                 appearance="secondary"
                                 onClick={handleOnOpenInDataMapper}

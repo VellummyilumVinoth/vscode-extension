@@ -93,6 +93,8 @@ export interface GetFromFileRequest {
 export interface DeleteFromProjectRequest {
     filePath: string;
 }
+
+// Data-mapper related interfaces
 export interface GenerateMappingsRequest {
     position: NodePosition;
     filePath: string;
@@ -111,29 +113,36 @@ export interface NotifyAIMappingsRequest {
     filePath: string;
 }
 
-export interface ParameterMetadata {
-    inputs: object;
-    output: object;
-    inputMetadata: object;
-    outputMetadata: object;
-    mapping_fields?: object;
-    constants?: Record<string, FieldConfig>;
-    configurables?: Record<string, FieldConfig>;
-    variables?: Record<string, FieldConfig>;
-}
-
 export interface RecordDefinitonObject {
-    recordFields: object;
-    recordFieldsMetadata: object;
+  recordFields: NestedFieldDescriptor;
+  recordFieldsMetadata: {
+    [fieldName: string]: FieldMetadata;
+  };
 }
 
-export interface MappingFileRecord {
-    mapping_fields: object;
+export interface SimpleFieldDescriptor {
+    type: string;
+    comment: string;
 }
 
-export interface ParameterDefinitions {
-    parameterMetadata: ParameterMetadata,
-    errorStatus: boolean
+export type NestedFieldDescriptor = {
+  [key: string]: SimpleFieldDescriptor | NestedFieldDescriptor;
+};
+
+export interface FieldMetadata {
+    typeName: string;
+    type: string;
+    typeInstance: string;
+    optional: boolean;
+    nullable?: boolean;
+    nullableArray?: boolean;
+    members?: {
+        [memberName: string]: FieldMetadata;
+    };
+
+    fields?: {
+        [fieldName: string]: FieldMetadata;
+    };
 }
 
 export interface ParameterField {
@@ -141,24 +150,99 @@ export interface ParameterField {
     parameterName: string;
     parameterType: string;
     type: string;
+    members?: {
+        [memberName: string]: FieldMetadata;
+    };
+    fields?: {
+        [fieldName: string]: FieldMetadata;
+    };
 }
 
-export interface FieldDescriptor {
-    type: string;
-    comment: string;
+export interface InputMetadata {
+  [parameterName: string]: ParameterField;
 }
 
-export interface FieldConfig {
-    typeName: string;
-    type: string;
-    typeInstance: string;
-    nullable: boolean;
-    optional: boolean;
+export interface OutputMetadata {
+  [fieldName: string]: FieldMetadata;
+}
+
+export interface MappingField {
+  MAPPING_TIP: string;
+  INPUT_FIELDS: string[];
+}
+
+export interface MappingFields {
+  [outputField: string]: MappingField;
+}
+
+export interface ParameterMetadata {
+    inputs: NestedFieldDescriptor;
+    output: NestedFieldDescriptor;
+    inputMetadata: InputMetadata;
+    outputMetadata: OutputMetadata;
+    mapping_fields?: MappingFields;
+    constants?: Record<string, FieldMetadata>;
+    configurables?: Record<string, FieldMetadata>;
+    variables?: Record<string, FieldMetadata>;
+}
+
+export interface MappingFileRecord {
+    mapping_fields: MappingFields;
+}
+
+export interface ParameterDefinitions {
+    parameterMetadata: ParameterMetadata,
+    errorStatus: boolean
 }
 
 export interface CodeSegment {
     segmentText: string;
     filePath: string;
+}
+
+export interface MappingData {
+    operation: string;
+    parameters: string[];
+    targetType: string;
+}
+
+export interface IntermediateMapping {
+    [key: string]: MappingData | IntermediateMapping;
+}
+
+export interface MappingsResponse {
+    mappings: IntermediateMapping;
+}
+
+export interface ProcessParentKeyResult {
+    itemKey: string;
+    combinedKey: string;
+    inputArrayNullable: boolean;
+}
+
+export interface ProcessCombinedKeyResult {
+    isinputRecordArrayNullable: boolean;
+    isinputRecordArrayOptional: boolean;
+    isinputArrayNullable: boolean;
+    isinputArrayOptional: boolean;
+    isinputNullableArray: boolean;
+}
+
+export interface VisitorContext {
+    recordFields: NestedFieldDescriptor;
+    recordFieldsMetadata: { [key: string]: FieldMetadata };
+    memberRecordFields: NestedFieldDescriptor;
+    memberFieldsMetadata: { [key: string]: FieldMetadata };
+    fieldMetadata: FieldMetadata;
+    isNill: boolean;
+    isNullable: boolean;
+    isArray: boolean;
+    isRecord: boolean;
+    isSimple: boolean;
+    isUnion: boolean;
+    isArrayNullable: boolean;
+    isRecordNullable: boolean;
+    memberName: string;
 }
 
 // Test-generator related interfaces
