@@ -22,13 +22,9 @@ import {
     ProjectSource,
     SourceFile,
     MappingParameters,
-    DataMappingRecord,
-    PostProcessResponse,
     TestGenerationTarget,
     LLMDiagnostics,
-    ImportStatement,
     DiagnosticEntry,
-    ExistingFunction,
     AIPanelPrompt,
     Command,
     TemplateId,
@@ -41,43 +37,36 @@ import {
     OperationType,
     GENERATE_TEST_AGAINST_THE_REQUIREMENT,
     GENERATE_CODE_AGAINST_THE_REQUIREMENT,
+    ComponentInfo,
 } from "@wso2/ballerina-core";
 
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
-import { Button, Icon, Codicon, Typography } from "@wso2/ui-toolkit";
+import { Button, Codicon } from "@wso2/ui-toolkit";
 
 import { AIChatInputRef } from "../AIChatInput";
 import ProgressTextSegment from "../ProgressTextSegment";
 import RoleContainer from "../RoleContainter";
 import { Attachment, AttachmentStatus } from "@wso2/ballerina-core";
-import { findRegexMatches, formatWithProperIndentation } from "../../../../utils/utils";
+import { formatWithProperIndentation } from "../../../../utils/utils";
 
 import { AIChatView, Header, HeaderButtons, ChatMessage, Badge } from "../../styles";
 import ReferenceDropdown from "../ReferenceDropdown";
 import AccordionItem from "../TestScenarioSegment";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
-import {
-    CopilotContentBlockContent,
-    CopilotErrorContent,
-    CopilotEvent,
-    hasCodeBlocks,
-    parseCopilotSSEEvent,
-} from "../../utils/sseUtils";
 import MarkdownRenderer from "../MarkdownRenderer";
 import { CodeSection } from "../CodeSection";
 import ErrorBox from "../ErrorBox";
-import { Input, parseBadgeString, parseInput, stringifyInputArrayWithBadges } from "../AIChatInput/utils/inputUtils";
+import { Input, parseInput, stringifyInputArrayWithBadges } from "../AIChatInput/utils/inputUtils";
 import { commandTemplates, NATURAL_PROGRAMMING_TEMPLATES } from "../../commandTemplates/data/commandTemplates.const";
 import { placeholderTags } from "../../commandTemplates/data/placeholderTags.const";
 import {
     getTemplateById,
     getTemplateTextById,
-    injectTags,
     removeTemplate,
     upsertTemplate,
 } from "../../commandTemplates/utils/utils";
 import { acceptResolver, handleAttachmentSelection } from "../../utils/attachment/attachmentManager";
-import { abortFetchWithAuth, fetchWithAuth } from "../../utils/networkUtils";
+import { fetchWithAuth } from "../../utils/networkUtils";
 import { SYSTEM_ERROR_SECRET } from "../AIChatInput/constants";
 import { CodeSegment } from "../CodeSegment";
 import AttachmentBox, { AttachmentsContainer } from "../AttachmentBox";
@@ -127,9 +116,6 @@ var remainingTokenPercentage: string | number;
 var remaingTokenLessThanOne: boolean = false;
 
 var timeToReset: number;
-const INVALID_RECORD_REFERENCE: Error = new Error(
-    "Invalid record reference. Follow <org-name>/<package-name>:<record-name> format when referencing to record in another package."
-);
 const NO_DRIFT_FOUND = "No drift identified between the code and the documentation.";
 const DRIFT_CHECK_ERROR = "Failed to check drift between the code and the documentation. Please try again.";
 const RATE_LIMIT_ERROR = ` Cause: Your usage limit has been exceeded. This should reset in the beggining of the next month.`;
@@ -157,6 +143,8 @@ const AIChat: React.FC = () => {
     );
 
     const [showSettings, setShowSettings] = useState(false);
+    const [currentFunctionInfo, setCurrentFunctionInfo] = useState<ComponentInfo[]>([]);
+
 
     //TODO: Need a better way of storing data related to last generation to be in the repair state.
     const currentDiagnosticsRef = useRef<DiagnosticEntry[]>([]);
@@ -213,8 +201,8 @@ const AIChat: React.FC = () => {
             chatLocation = (await rpcClient.getVisualizerLocation()).projectUri;
             setIsReqFileExists(
                 chatLocation != null &&
-                    chatLocation != undefined &&
-                    (await rpcClient.getAiPanelRpcClient().isRequirementsSpecificationFileExist(chatLocation))
+                chatLocation != undefined &&
+                (await rpcClient.getAiPanelRpcClient().isRequirementsSpecificationFileExist(chatLocation))
             );
 
             generateNaturalProgrammingTemplate(isReqFileExists);
@@ -436,6 +424,7 @@ const AIChat: React.FC = () => {
         currentDiagnosticsRef.current = [];
         functionsRef.current = [];
         lastAttatchmentsRef.current = null;
+        setCurrentFunctionInfo([]);
 
         try {
             await processContent(content);
@@ -735,68 +724,11 @@ const AIChat: React.FC = () => {
         await rpcClient.getAiPanelRpcClient().generateCode(requestBody);
     }
 
-    // Helper function to escape regex special characters in a string
-    function escapeRegexString(str: string): string {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-
-    // Function to create regex for finding a function without error type
-    function createFunctionWithoutErrorTypeRegex(functionName: string, returnType: string): RegExp {
-        const escapedReturnType = escapeRegexString(returnType);
-        return new RegExp(
-            `function\\s+${functionName}\\s*\\([^)]+\\)\\s*returns\\s+${escapedReturnType}(?!\\|error)\\s*(?:=>|\\{)`,
-            "s"
-        );
-    }
-
-    // Function to create regex for adding error type to a function signature
-    function createAddErrorTypeRegex(functionName: string, returnType: string): RegExp {
-        const escapedReturnType = escapeRegexString(returnType);
-        return new RegExp(
-            `(function\\s+${functionName}\\s*\\([^)]+\\)\\s*returns\\s+${escapedReturnType})\\s*(=>|\\{)`,
-            "s"
-        );
-    }
-
-    // Function to create regex for arrow function signatures
-    function createArrowFunctionSignatureRegex(functionName: string, returnType: string): RegExp {
-        const escapedReturnType = escapeRegexString(returnType);
-        return new RegExp(
-            `(function\\s+${functionName}\\s*\\([^)]+\\)\\s*returns\\s+${escapedReturnType}(?:\\|error)?)\\s*=>\\s*\\{[^}]*\\}`,
-            "s"
-        );
-    }
-
-    // Function to create regex for regular function signatures
-    function createRegularFunctionSignatureRegex(functionName: string, returnType: string): RegExp {
-        const escapedReturnType = escapeRegexString(returnType);
-        return new RegExp(
-            `(function\\s+${functionName}\\s*\\([^)]+\\)\\s*returns\\s+${escapedReturnType}(?:\\|error)?)\\s*\\{[^}]*\\}`,
-            "s"
-        );
-    }
-
-    // Fucntion to create regex to match function signatures without capturing the function body.
-    function createExistingFunctionSignatureRegex(functionName: string) {
-        return new RegExp(`function\\s+${functionName}\\s*\\([^)]*\\)\\s*returns\\s+[^=]+\\s*=>\\s*(?:\\{|)`, "s");
-    }
-
-    // Function to remove the body of a specified function while keeping the rest of the code unchanged.
-    function removeFunctionBody(content: string, functionName: string) {
-        // Regular expression to match the function signature and body
-        const functionRegex = new RegExp(
-            `(function\\s+${functionName}\\s*\\([^)]*\\)\\s*returns\\s+[^=]+\\s*=>)\\s*(?:\\{[^]*?\\}|[^;]*);`,
-            "s"
-        );
-
-        // Replace the matched function body with an empty function body `{}` while keeping the signature
-        return content.replace(functionRegex, `$1 {};`);
-    }
-
     const handleAddAllCodeSegmentsToWorkspace = async (
         codeSegments: any,
         setIsCodeAdded: React.Dispatch<React.SetStateAction<boolean>>,
-        command: string
+        command: string,
+        functionInfo: ComponentInfo[]
     ) => {
         console.log("Add to integration called. Command: ", command);
         for (let { segmentText, filePath } of codeSegments) {
@@ -816,95 +748,12 @@ const AIChat: React.FC = () => {
             }
 
             if (command === "ai_map") {
-                const importRegex = /import\s+[^;]+;/g;
-                const commentRegex = /^(?:(\/\/.*|#.*)\n)+/; // Matches both `//` and `#` comment blocks at the top
-                const functionRegex =
-                    /function\s+(\w+)\s*\(([^)]*)\)\s*returns\s+([^={|]+)(?:\|error)?\s*=>\s*(?:\{([\s\S]*?)\}|([\s\S]*?));/;
-
-                let existingFunctionRegex;
-
-                // Check if we're dealing with a function that should be merged
-                const functionMatch = segmentText.match(functionRegex);
-                let shouldMergeFunction = false;
-                let functionName = "";
-                let functionBody = "";
-                let returnType = "";
-                let hasErrorType = false;
-                let updatedContent = "";
-
-                if (functionMatch) {
-                    functionName = functionMatch[1];
-                    const params = functionMatch[2];
-                    returnType = functionMatch[3].trim();
-                    functionBody = functionMatch[4] ? functionMatch[4].trim() : functionMatch[5]?.trim();
-
-                    // Check if new function has error return type
-                    hasErrorType = segmentText.includes(`returns ${returnType}|error`);
-                    existingFunctionRegex = createExistingFunctionSignatureRegex(functionName);
-                    const existingFunctionMatch = originalContent.match(existingFunctionRegex);
-
-                    if (existingFunctionMatch) {
-                        shouldMergeFunction = true;
-                    }
-                }
-
-                const imports = segmentText.match(importRegex) || [];
-                const codeWithoutImports = segmentText.replace(importRegex, "").trim();
-
-                updatedContent = removeFunctionBody(originalContent, functionName);
-
-                // Extract existing comments at the top
-                const commentMatch = updatedContent.match(commentRegex);
-                const existingComments = commentMatch ? commentMatch[0].trim() + "\n\n" : "";
-                updatedContent = updatedContent.replace(commentRegex, "").trim();
-
-                // Find any additional `#` comments that may exist before imports
-                const additionalCommentMatch = updatedContent.match(commentRegex);
-                const additionalComments = additionalCommentMatch ? additionalCommentMatch[0].trim() + "\n\n" : "";
-                updatedContent = updatedContent.replace(commentRegex, "").trim();
-
-                // Ensure new imports are added after all comments
-                let updatedImports = "";
-                imports.forEach((imp: string) => {
-                    if (!updatedContent.includes(imp)) {
-                        updatedImports += `${imp}\n`;
-                    }
+                const mergeResult = await rpcClient.getAiPanelRpcClient().mergeCodeSegmentWithExistingFile({
+                    originalContent,
+                    segmentText,
+                    functionInfo
                 });
-
-                if (shouldMergeFunction) {
-                    const existingFunctionWithoutErrorRegex = createFunctionWithoutErrorTypeRegex(
-                        functionName,
-                        returnType
-                    );
-                    const missingErrorType = existingFunctionWithoutErrorRegex.test(updatedContent) && hasErrorType;
-
-                    if (missingErrorType) {
-                        const addErrorTypeRegex = createAddErrorTypeRegex(functionName, returnType);
-                        updatedContent = updatedContent.replace(addErrorTypeRegex, `$1|error $2`);
-                    }
-
-                    const arrowFunctionSignatureRegex = createArrowFunctionSignatureRegex(functionName, returnType);
-                    const regularFunctionSignatureRegex = createRegularFunctionSignatureRegex(functionName, returnType);
-                    const isExpressionBody = /^\s*from\b/.test(functionBody);
-
-                    if (arrowFunctionSignatureRegex.test(updatedContent)) {
-                        updatedContent = updatedContent.replace(arrowFunctionSignatureRegex, (match, signature) => {
-                            return isExpressionBody
-                                ? `${signature} => ${functionBody}`
-                                : `${signature} => {\n    ${functionBody}\n}`;
-                        });
-                    } else if (regularFunctionSignatureRegex.test(updatedContent)) {
-                        updatedContent = updatedContent.replace(regularFunctionSignatureRegex, (match, signature) => {
-                            return `${signature} {\n    ${functionBody}\n}`;
-                        });
-                    }
-
-                    updatedContent = `${existingComments}${additionalComments}${updatedImports}${updatedContent}`;
-                } else {
-                    updatedContent = `${existingComments}${additionalComments}${updatedImports}${updatedContent}\n${codeWithoutImports}`;
-                }
-
-                segmentText = updatedContent.trim();
+                segmentText = mergeResult.mergedContent;
             } else if (command === "ai_map_inline") {
                 rpcClient.getAiPanelRpcClient().addInlineCodeSegmentToWorkspace({ segmentText, filePath });
                 continue;
@@ -919,7 +768,7 @@ const AIChat: React.FC = () => {
                 isTestCode = true;
             }
 
-            await rpcClient
+            rpcClient
                 .getAiPanelRpcClient()
                 .addToProject({ filePath: filePath, content: segmentText, isTestCode: isTestCode });
         }
@@ -1046,148 +895,6 @@ const AIChat: React.FC = () => {
         }
     }
 
-    // Process records from another package
-    function processRecordReference(
-        recordName: string,
-        recordMap: Map<string, any>,
-        allImports: Array<{ moduleName: string; alias?: string }>,
-        importsMap: Map<string, { moduleName: string; alias?: string; recordName: string }>
-    ): DataMappingRecord | Error {
-        const isArray = recordName.endsWith("[]");
-        const cleanedRecordName = recordName.replace(/\[\]$/, "");
-
-        // Check for primitive types
-        const primitiveTypes = ["string", "int", "boolean", "float", "decimal"];
-        if (primitiveTypes.includes(cleanedRecordName)) {
-            return { type: `${cleanedRecordName}`, isArray, filePath: null };
-        }
-        const rec = recordMap.get(cleanedRecordName);
-
-        if (!rec) {
-            if (cleanedRecordName.includes(":")) {
-                if (!cleanedRecordName.includes("/")) {
-                    const [moduleName, recordName] = cleanedRecordName.split(":");
-                    const matchedImport = allImports.find((imp) => {
-                        if (imp.alias) {
-                            return cleanedRecordName.startsWith(imp.alias);
-                        }
-                        const moduleNameParts = imp.moduleName.split(/[./]/);
-                        const inferredAlias = moduleNameParts[moduleNameParts.length - 1];
-                        return cleanedRecordName.startsWith(inferredAlias);
-                    });
-
-                    if (!matchedImport) {
-                        return INVALID_RECORD_REFERENCE;
-                    }
-                    importsMap.set(cleanedRecordName, {
-                        moduleName: matchedImport.moduleName,
-                        alias: matchedImport.alias,
-                        recordName: recordName,
-                    });
-                } else {
-                    const [moduleName, recordName] = cleanedRecordName.split(":");
-                    importsMap.set(cleanedRecordName, {
-                        moduleName: moduleName,
-                        recordName: recordName,
-                    });
-                }
-                return { type: `${cleanedRecordName}`, isArray, filePath: null };
-            } else {
-                throw new Error(`${cleanedRecordName} is not defined.`);
-            }
-        }
-        return { ...rec, isArray };
-    }
-
-    // Processes existing functions to find a matching function by name
-    async function processExistingFunctions(
-        existingFunctions: ExistingFunction[],
-        functionName: string
-    ): Promise<{
-        match: RegExpMatchArray | null;
-        functionNameMatch: boolean;
-        matchingFunctionFile: string | null;
-    }> {
-        for (const func of existingFunctions) {
-            const functionContent = await rpcClient.getAiPanelRpcClient().getContentFromFile({
-                filePath: func.filePath,
-            });
-
-            const fileName = func.filePath.split("/").pop();
-            const contentLines = functionContent.split("\n");
-            // Filter out commented lines (both // and # style comments)
-            const nonCommentedLines = contentLines.filter((line) => {
-                const trimmedLine = line.trim();
-                return !(trimmedLine.startsWith("//") || trimmedLine.startsWith("#"));
-            });
-            const cleanContent = nonCommentedLines.join("\n");
-
-            const signatureRegex = /function\s+(\w+)\s*\(([^)]*)\)\s*returns\s+([^{=]+)(?:\s*=>\s*)?/g;
-
-            // Use matchAll to find all function signatures in the content
-            const matches = [...cleanContent.matchAll(signatureRegex)];
-
-            // Check if any of the function signatures match the target function name
-            for (const match of matches) {
-                const funcName = match[1];
-                if (funcName === functionName) {
-                    return {
-                        match,
-                        functionNameMatch: true,
-                        matchingFunctionFile: fileName,
-                    };
-                }
-            }
-        }
-
-        // If no match is found
-        return {
-            match: null,
-            functionNameMatch: false,
-            matchingFunctionFile: null,
-        };
-    }
-
-    // Process input parameters
-    function processInputs(
-        inputParams: string[],
-        recordMap: Map<any, any>,
-        allImports: ImportStatement[],
-        importsMap: Map<any, any>
-    ) {
-        let results = inputParams.map((param: string) =>
-            processRecordReference(param, recordMap, allImports, importsMap)
-        );
-        return results.filter((result): result is DataMappingRecord => {
-            if (result instanceof Error) {
-                throw INVALID_RECORD_REFERENCE;
-            }
-            return true;
-        });
-    }
-
-    // Process Output parameters
-    function processOutput(
-        outputParam: string,
-        recordMap: Map<any, any>,
-        allImports: { moduleName: string; alias?: string }[],
-        importsMap: Map<any, any>
-    ) {
-        const parts = outputParam.split("|");
-        const validParts = parts.filter((name: string) => name !== "error");
-        if (validParts.length > 1) {
-            throw new Error(
-                `Invalid output parameter: "${outputParam}". Union types are not supported. Please provide a single valid record name.`
-            );
-        }
-        const cleanedOutputRecordName = validParts.length > 0 ? validParts[0] : "error";
-        const outputResult = processRecordReference(cleanedOutputRecordName, recordMap, allImports, importsMap);
-        if (outputResult instanceof Error) {
-            throw INVALID_RECORD_REFERENCE;
-        }
-        return outputResult;
-    }
-
     async function processMappingParameters(
         message: string,
         parameters: MappingParameters,
@@ -1196,13 +903,6 @@ const AIChat: React.FC = () => {
         let assistant_response = "";
         let newImports;
         const recordMap = new Map();
-        const importsMap = new Map();
-        let inputs: DataMappingRecord[];
-        let output;
-        let inputParams;
-        let outputParam;
-        let inputNames: string[] = [];
-        let result;
         setIsLoading(true);
 
         const functionName = parameters.functionName;
@@ -1211,16 +911,7 @@ const AIChat: React.FC = () => {
         const activeFile = await rpcClient.getAiPanelRpcClient().getActiveFile();
         const projectComponents = await rpcClient.getBIDiagramRpcClient().getProjectComponents();
 
-        const allImports: ImportStatement[] = [];
-        projectImports.imports.forEach((file) => {
-            if (file.statements && file.statements.length > 0) {
-                file.statements.forEach((statement) => {
-                    allImports.push(statement);
-                });
-            }
-        });
-
-        const existingFunctions: { name: string; filePath: string; startLine: number; endLine: number }[] = [];
+        const existingFunctions: ComponentInfo[] = [];
 
         for (const pkg of projectComponents.components.packages || []) {
             for (const mod of pkg.modules || []) {
@@ -1243,50 +934,48 @@ const AIChat: React.FC = () => {
                         name: func.name,
                         filePath: filepath + func.filePath,
                         startLine: func.startLine,
+                        startColumn: func.startColumn,
                         endLine: func.endLine,
+                        endColumn: func.endColumn
+                        
                     });
                 });
             }
         }
 
-        if (parameters.inputRecord.length > 0 || parameters.outputRecord !== "") {
-            result = await processExistingFunctions(existingFunctions, functionName);
-            if (result.functionNameMatch) {
-                throw new Error(
-                    `A function named "${functionName}" exists in '${result.matchingFunctionFile}'. Please provide a valid function name.`
-                );
-            }
-            inputParams = parameters.inputRecord;
-            outputParam = parameters.outputRecord;
-        } else {
-            if (existingFunctions.length === 0) {
-                throw new Error(
-                    `A function named "${functionName}" was not found in the project. Please provide a valid function name.`
-                );
-            }
-            result = await processExistingFunctions(existingFunctions, functionName);
-            if (!result.functionNameMatch) {
-                throw new Error(
-                    `A function named "${functionName}" was not found in the project. Please provide a valid function name.`
-                );
-            }
-            const params = result.match[2].split(/,\s*/).map((param) => param.trim().split(/\s+/));
-            inputParams = params.map((parts) => parts[0]);
-            inputNames = params.map((parts) => parts[1]);
-            outputParam = result.match[3].trim();
+        const matchingFunction = existingFunctions.filter(func => func.name === functionName);
+        setCurrentFunctionInfo(matchingFunction);
+
+        const functionContents = new Map();
+        if (existingFunctions.length > 0) {
+            const uniqueFilePaths = [...new Set(existingFunctions.map(func => func.filePath))];
+            const contentPromises = uniqueFilePaths.map(filePath =>
+                rpcClient.getAiPanelRpcClient().getContentFromFile({ filePath })
+                    .then(content => ({ filePath, content }))
+            );
+
+            const contentResults = await Promise.all(contentPromises);
+            contentResults.forEach(({ filePath, content }) => {
+                functionContents.set(filePath, content);
+            });
         }
 
-        inputs = processInputs(inputParams, recordMap, allImports, importsMap);
-        output = processOutput(outputParam, recordMap, allImports, importsMap);
+        const mappingDetails = await rpcClient.getAiPanelRpcClient().extractMappingDetails({
+            parameters,
+            recordMap: Object.fromEntries(recordMap),
+            projectImports: projectImports.imports,
+            existingFunctions,
+            functionContents: Object.fromEntries(functionContents)
+        });
 
         const requestPayload: any = {
             backendUri: "",
             token: "",
-            inputRecordTypes: inputs,
-            outputRecordType: output,
+            inputRecordTypes: mappingDetails.inputs,
+            outputRecordType: mappingDetails.output,
             functionName,
-            imports: Array.from(importsMap.values()),
-            inputNames: inputNames,
+            imports: mappingDetails.imports,
+            inputNames: mappingDetails.inputNames,
         };
         if (attachments && attachments.length > 0) {
             requestPayload.attachment = attachments;
@@ -1295,28 +984,28 @@ const AIChat: React.FC = () => {
         setIsLoading(false);
 
         assistant_response = `Mappings consist of the following:\n`;
-        if (inputParams.length === 1) {
-            assistant_response += `- **Input Record**: ${inputParams[0]}\n`;
+        if (mappingDetails.inputParams.length === 1) {
+            assistant_response += `- **Input Record**: ${mappingDetails.inputParams[0]}\n`;
         } else {
-            assistant_response += `- **Input Records**: ${inputParams.join(", ")}\n`;
+            assistant_response += `- **Input Records**: ${mappingDetails.inputParams.join(", ")}\n`;
         }
-        assistant_response += `- **Output Record**: ${outputParam}\n`;
+        assistant_response += `- **Output Record**: ${mappingDetails.outputParam}\n`;
         assistant_response += `- **Function Name**: ${functionName}\n`;
 
-        if (result.functionNameMatch) {
+        if (mappingDetails.existingFunctionMatch.functionNameMatch) {
             assistant_response += `\n**Note**: When you click **Add to Integration**, it will override your existing mappings.\n`;
         }
 
         let filePath;
-        if (result.functionNameMatch) {
-            filePath = result.matchingFunctionFile;
+        if (mappingDetails.existingFunctionMatch.functionNameMatch) {
+            filePath = mappingDetails.existingFunctionMatch.matchingFunctionFile;
         } else if (activeFile && activeFile.endsWith(".bal")) {
             filePath = activeFile;
         } else {
             filePath = "data_mappings.bal";
         }
         let finalContent = response.mappingCode;
-        const needsImports = Array.from(importsMap.values()).length > 0;
+        const needsImports =mappingDetails.imports.length > 0;
 
         if (needsImports) {
             let fileContent = await rpcClient.getAiPanelRpcClient().getFromFile({ filePath: filePath });
@@ -1324,7 +1013,7 @@ const AIChat: React.FC = () => {
                 fileContent.match(/import\s+([a-zA-Z0-9._]+)/g)?.map((imp) => imp.split(" ")[1]) || []
             );
 
-            newImports = Array.from(importsMap.values())
+            newImports = mappingDetails.imports
                 .filter((imp) => !existingImports.has(imp.moduleName))
                 .map((imp) => {
                     const moduleName = imp.moduleName.trim();
@@ -1816,6 +1505,7 @@ const AIChat: React.FC = () => {
                                                             isPromptExecutedInCurrentWindow
                                                         }
                                                         isErrorChunkReceived={isErrorChunkReceivedRef.current}
+                                                        functionInfo={currentFunctionInfo}
                                                     />
                                                 );
                                             }

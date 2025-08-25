@@ -20,13 +20,13 @@
 import { NodePosition } from "@wso2/syntax-tree";
 import { AIMachineContext, AIMachineStateValue } from "../../state-machine-types";
 import { Command, TemplateId } from "../../interfaces/ai-panel";
-import { FormField } from "../../interfaces/config-spec";
+import { ComponentInfo, ImportStatement, ImportStatements } from "../..";
 
 // ==================================
 // General Interfaces
 // ==================================
 export type AIPanelPrompt =
-    | { type: 'command-template'; command: Command; templateId: TemplateId; text?: string; params?: Map<string, string>; metadata?: Record<string, any> }
+    | { type: 'command-template'; command: Command; templateId: TemplateId; text?: string; params?: Record<string, string>; metadata?: Record<string, any> }
     | { type: 'text'; text: string }
     | undefined;
 
@@ -120,6 +120,77 @@ export interface CodeSegment {
     filePath: string;
 }
 
+export interface DataMappingRecord {
+    type: string;
+    isArray: boolean;
+    filePath: string;
+}
+
+export interface GenerateMappingsFromRecordRequest {
+    backendUri: string;
+    token: string;
+    inputRecordTypes: DataMappingRecord[];
+    outputRecordType: DataMappingRecord;
+    functionName: string;
+    imports: { moduleName: string; alias?: string }[];
+    inputNames?: string[];
+    attachment?: Attachment[]
+}
+
+export interface GenerateTypesFromRecordRequest {
+    backendUri: string;
+    token: string;
+    attachment?: Attachment[]
+}
+
+export interface GenerateMappingFromRecordResponse {
+    mappingCode: string;
+}
+
+export interface GenerateTypesFromRecordResponse {
+    typesCode: string;
+}
+
+export interface MappingParameters {
+    inputRecord: string[];
+    outputRecord: string,
+    functionName?: string;
+}
+
+export interface ExtractMappingDetailsRequest {
+    parameters: MappingParameters;                
+    recordMap: Record<string, DataMappingRecord>;    
+    projectImports: ImportStatements[];            
+    existingFunctions: ComponentInfo[];    
+    functionContents: Record<string, string>;        
+}
+
+export interface ExistingFunctionMatchResult {
+    match: RegExpMatchArray | null;
+    functionNameMatch: boolean;
+    matchingFunctionFile: string | null;
+}
+
+export interface ExtractMappingDetailsResponse {
+    inputs: DataMappingRecord[];    
+    output: DataMappingRecord; 
+    inputParams: string[];
+    outputParam: string;   
+    imports: ImportStatement[];   
+    inputNames: string[];
+    existingFunctionMatch: ExistingFunctionMatchResult;       
+}
+
+export interface FunctionMergeParams {
+    originalContent: string;
+    segmentText: string;
+    functionInfo: ComponentInfo[];
+}
+
+export interface FunctionMergeResult {
+    mergedContent: string;
+}
+
 // Test-generator related interfaces
 export enum TestGenerationTarget {
     Service = "service",
@@ -155,43 +226,6 @@ export interface TestGeneratorIntermediaryState {
     testPlan: string;
 }
 
-
-export interface DataMappingRecord {
-    type: string;
-    isArray: boolean;
-    filePath: string;
-}
-
-export interface GenerateMappingsFromRecordRequest {
-    backendUri: string;
-    token: string;
-    inputRecordTypes: DataMappingRecord[];
-    outputRecordType: DataMappingRecord;
-    functionName: string;
-    imports: { moduleName: string; alias?: string }[];
-    inputNames?: string[];
-    attachment?: Attachment[]
-}
-
-export interface GenerateTypesFromRecordRequest {
-    backendUri: string;
-    token: string;
-    attachment?: Attachment[]
-}
-
-export interface GenerateMappingFromRecordResponse {
-    mappingCode: string;
-}
-export interface GenerateTypesFromRecordResponse {
-    typesCode: string;
-}
-export interface MappingParameters {
-    inputRecord: string[];
-    outputRecord: string,
-    functionName?: string;
-}
-
-
 export interface PostProcessRequest {
     assistant_response: string;
 }
@@ -224,13 +258,6 @@ export interface DocAssistantResponse {
 export interface LLMDiagnostics {
     statusCode: number;
     diags: string;
-}
-
-export interface ExistingFunction {
-    name: string;
-    filePath: string;
-    startLine: number;
-    endLine: number;
 }
 
 // ==================================

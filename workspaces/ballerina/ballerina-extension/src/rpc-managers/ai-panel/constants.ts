@@ -35,12 +35,49 @@ export enum PrimitiveType {
   BOOLEAN = "boolean"
 }
 
+// Nullable primitive data types
+export enum NullablePrimitiveType {
+  STRING = "string|()",
+  INT = "int|()",
+  FLOAT = "float|()",
+  DECIMAL = "decimal|()",
+  BOOLEAN = "boolean|()"
+}
+
+// Collection of numeric and boolean types for type checking and validation
 export const NUMERIC_AND_BOOLEAN_TYPES = [
     PrimitiveType.INT, 
     PrimitiveType.FLOAT, 
     PrimitiveType.DECIMAL, 
     PrimitiveType.BOOLEAN
 ];
+
+// Array types for primitive data types
+export enum PrimitiveArrayType {
+  // Basic array types
+  STRING_ARRAY = "string[]",
+  STRING_ARRAY_NULLABLE = "string[]|()",
+  INT_ARRAY = "int[]",
+  INT_ARRAY_NULLABLE = "int[]|()",
+  FLOAT_ARRAY = "float[]",
+  FLOAT_ARRAY_NULLABLE = "float[]|()",
+  DECIMAL_ARRAY = "decimal[]",
+  DECIMAL_ARRAY_NULLABLE = "decimal[]|()",
+  BOOLEAN_ARRAY = "boolean[]",
+  BOOLEAN_ARRAY_NULLABLE = "boolean[]|()",
+  
+  // Arrays with nullable elements
+  STRING_OR_NULL_ARRAY = "(string|())[]",
+  STRING_OR_NULL_ARRAY_NULLABLE = "(string|())[]|()",
+  INT_OR_NULL_ARRAY = "(int|())[]",
+  INT_OR_NULL_ARRAY_NULLABLE = "(int|())[]|()",
+  FLOAT_OR_NULL_ARRAY = "(float|())[]",
+  FLOAT_OR_NULL_ARRAY_NULLABLE = "(float|())[]|()",
+  DECIMAL_OR_NULL_ARRAY = "(decimal|())[]",
+  DECIMAL_OR_NULL_ARRAY_NULLABLE = "(decimal|())[]|()",
+  BOOLEAN_OR_NULL_ARRAY = "(boolean|())[]",
+  BOOLEAN_OR_NULL_ARRAY_NULLABLE = "(boolean|())[]|()"
+}
 
 // Operations that can be performed during data mapping
 export enum Operation {
@@ -88,6 +125,7 @@ export enum ArrayEnumUnionType {
   INTERSECTION_ARRAY_NULLABLE = "intersection[]|()"
 }
 
+// Record types including single records and arrays with various modifiers
 export enum RecordType {
   RECORD = "record",
   RECORD_NULLABLE = "record|()",
@@ -103,6 +141,7 @@ export enum RecordType {
   READONLY_RECORD_OR_NULL_ARRAY_NULLABLE = "(readonly&record|())[]|()"
 }
 
+// Types for union, enum, and intersection data structures
 export enum UnionEnumIntersectionType {
   ENUM = "enum",
   UNION = "union",
@@ -115,6 +154,7 @@ export enum UnionEnumIntersectionType {
   INTERSECTION_ARRAY_NULLABLE = "intersection[]|()"
 }
 
+// Metadata type classification for input and output data structures
 export enum MetadataType {
     INPUT_METADATA = "inputMetadata",
     OUTPUT_METADATA = "outputMetadata"

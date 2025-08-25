@@ -26,8 +26,12 @@ import {
     CodeSegment,
     DeleteFromProjectRequest,
     DeveloperDocument,
+    ExtractMappingDetailsRequest,
+    ExtractMappingDetailsResponse,
     FetchDataRequest,
     FetchDataResponse,
+    FunctionMergeParams,
+    FunctionMergeResult,
     GenerateCodeRequest,
     GenerateMappingFromRecordResponse,
     GenerateMappingsFromRecordRequest,
@@ -67,6 +71,7 @@ import {
     clearInitialPrompt,
     createTestDirecoryIfNotExists,
     deleteFromProject,
+    extractMappingDetails,
     fetchData,
     generateCode,
     generateFunctionTests,
@@ -104,6 +109,7 @@ import {
     isNaturalProgrammingDirectoryExists,
     isRequirementsSpecificationFileExist,
     markAlertShown,
+    mergeCodeSegmentWithExistingFile,
     notifyAIMappings,
     openInlineMappingChatWindow,
     postProcess,
@@ -209,6 +215,14 @@ export class AiPanelRpcClient implements AIPanelAPI {
 
     addInlineCodeSegmentToWorkspace(params: CodeSegment): void {
         return this._messenger.sendNotification(addInlineCodeSegmentToWorkspace, HOST_EXTENSION, params);
+    }
+
+    extractMappingDetails(params: ExtractMappingDetailsRequest): Promise<ExtractMappingDetailsResponse> {
+        return this._messenger.sendRequest(extractMappingDetails, HOST_EXTENSION, params);
+    }
+
+    mergeCodeSegmentWithExistingFile(params: FunctionMergeParams): Promise<FunctionMergeResult> {
+        return this._messenger.sendRequest(mergeCodeSegmentWithExistingFile, HOST_EXTENSION, params);
     }
 
     getGeneratedTests(params: TestGenerationRequest): Promise<TestGenerationResponse> {

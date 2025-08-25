@@ -33,8 +33,11 @@ import {
     deleteFromProject,
     DeleteFromProjectRequest,
     DeveloperDocument,
+    extractMappingDetails,
+    ExtractMappingDetailsRequest,
     fetchData,
     FetchDataRequest,
+    FunctionMergeParams,
     generateCode,
     GenerateCodeRequest,
     generateFunctionTests,
@@ -78,6 +81,7 @@ import {
     isNaturalProgrammingDirectoryExists,
     isRequirementsSpecificationFileExist,
     markAlertShown,
+    mergeCodeSegmentWithExistingFile,
     MetadataWithAttachments,
     notifyAIMappings,
     NotifyAIMappingsRequest,
@@ -129,6 +133,8 @@ export function registerAiPanelRpcHandlers(messenger: Messenger) {
     messenger.onNotification(openInlineMappingChatWindow, () => rpcManger.openInlineMappingChatWindow());
     messenger.onRequest(getMappingsFromModel, (args: MetadataWithAttachments) => rpcManger.getMappingsFromModel(args));
     messenger.onNotification(addInlineCodeSegmentToWorkspace, (args: CodeSegment) => rpcManger.addInlineCodeSegmentToWorkspace(args));
+    messenger.onRequest(extractMappingDetails, (args: ExtractMappingDetailsRequest) => rpcManger.extractMappingDetails(args));
+    messenger.onRequest(mergeCodeSegmentWithExistingFile, (args: FunctionMergeParams) => rpcManger.mergeCodeSegmentWithExistingFile(args));
     messenger.onRequest(getGeneratedTests, (args: TestGenerationRequest) => rpcManger.getGeneratedTests(args));
     messenger.onRequest(getTestDiagnostics, (args: TestGenerationResponse) => rpcManger.getTestDiagnostics(args));
     messenger.onRequest(getServiceSourceForName, (args: string) => rpcManger.getServiceSourceForName(args));

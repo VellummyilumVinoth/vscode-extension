@@ -17,13 +17,14 @@
  */
 
 import { ArrayTypeDesc, FunctionDefinition, ModulePart, QualifiedNameReference, RequiredParam, STKindChecker } from "@wso2/syntax-tree";
-import { FormField, STModification, SyntaxTree, Attachment, AttachmentStatus, keywords, DiagnosticEntry, InlineDataMapperModelResponse } from "@wso2/ballerina-core";
+import { FormField, STModification, SyntaxTree, Attachment, AttachmentStatus, keywords, DiagnosticEntry, InlineDataMapperModelResponse, ImportStatement, DataMappingRecord, ComponentInfo } from "@wso2/ballerina-core";
 import { window } from 'vscode';
 
 import { StateMachine } from "../../stateMachine";
 import {
     INVALID_PARAMETER_TYPE,
     INVALID_PARAMETER_TYPE_MULTIPLE_ARRAY,
+    INVALID_RECORD_REFERENCE,
     INVALID_RECORD_UNION_TYPE
 } from "../../views/ai-panel/errorCodes";
 import path from "path";
@@ -34,7 +35,7 @@ import { generateAutoMappings } from "../../../src/features/ai/service/datamappe
 import { DatamapperResponse, Payload } from "../../../src/features/ai/service/datamapper/types";
 import { DataMapperRequest, DataMapperResponse, FileData, processDataMapperInput } from "../../../src/features/ai/service/datamapper/context_api";
 import { getAskResponse } from "../../../src/features/ai/service/ask/ask";
-import { ArrayEnumUnionType, ArrayRecordType, MetadataType, NUMERIC_AND_BOOLEAN_TYPES, Operation, PrimitiveType, RecordType, UnionEnumIntersectionType } from "./constants";
+import { ArrayEnumUnionType, ArrayRecordType, MetadataType, NullablePrimitiveType, NUMERIC_AND_BOOLEAN_TYPES, Operation, PrimitiveArrayType, PrimitiveType, RecordType, UnionEnumIntersectionType } from "./constants";
 import { FieldMetadata, InputMetadata, IntermediateMapping, MappingData, MappingFileRecord, NestedFieldDescriptor, OutputMetadata, ParameterDefinitions, ParameterField, ParameterMetadata, ProcessCombinedKeyResult, ProcessParentKeyResult, RecordDefinitonObject } from "./types";
 
 const BACKEND_BASE_URL = BACKEND_URL.replace(/\/v2\.0$/, "");
@@ -81,6 +82,29 @@ const isPrimitiveType = (type: string): boolean => {
     return Object.values(PrimitiveType).includes(type as PrimitiveType);
 };
 
+const isPrimitiveArrayType = (type: string): boolean => {
+    if (Object.values(PrimitiveArrayType).includes(type as PrimitiveArrayType)) {
+        return true;
+    }
+    
+    // Handle union types like (string|int)[], (string|())[] etc.
+    const unionArrayPattern = /^\(([^)]+)\)\[\](\|\(\))?$/;
+    const match = type.match(unionArrayPattern);
+    
+    if (match) {
+        const unionTypes = match[1].split('|').map(t => t.trim());
+        // Check if all types in the union are either primitive types or null "()"
+        return unionTypes.every(unionType => 
+            isPrimitiveType(unionType)
+        );
+    }
+    return false;
+};
+
+const isNullablePrimitiveType = (type: string): boolean => {
+    return Object.values(NullablePrimitiveType).includes(type as NullablePrimitiveType);
+};
+
 const isUnionEnumIntersectionType = (type: string): boolean => {
     return Object.values(UnionEnumIntersectionType).includes(type as UnionEnumIntersectionType);
 };
@@ -96,6 +120,14 @@ const isArrayRecord = (type: string): boolean => {
 const isArrayEnumUnion = (type: string): boolean => {
     return Object.values(ArrayEnumUnionType).includes(type as ArrayEnumUnionType);
 };
+
+function isPrimitiveTypeDesc(typeName: any) {
+    return STKindChecker.isStringTypeDesc(typeName) ||
+           STKindChecker.isIntTypeDesc(typeName) ||
+           STKindChecker.isFloatTypeDesc(typeName) ||
+           STKindChecker.isDecimalTypeDesc(typeName) ||
+           STKindChecker.isBooleanTypeDesc(typeName);
+}
 
 export async function getParamDefinitions(
     fnSt: FunctionDefinition,
@@ -125,11 +157,11 @@ export async function getParamDefinitions(
             }
 
             if (param.typeData.typeSymbol.typeKind === "array") {
-                paramType = param.typeName.source;
+                paramType = param.typeName.source.trim();
             } else if (param.typeData.typeSymbol.typeKind === "typeReference") {
-                paramType = param.typeData.typeSymbol.name;
+                paramType = param.typeData.typeSymbol;
             } else {
-                paramType = param.typeName.source;
+                paramType = param.typeName.source.trim();
             }
 
             const position = STKindChecker.isQualifiedNameReference(param.typeName)
@@ -235,13 +267,10 @@ export async function getParamDefinitions(
             if (!hasArrayParams) {
                 throw new Error(INVALID_PARAMETER_TYPE_MULTIPLE_ARRAY.message);
             }
-            if (!(STKindChecker.isSimpleNameReference(fnSt.functionSignature.returnTypeDesc.type.memberTypeDesc) ||
-                STKindChecker.isQualifiedNameReference(fnSt.functionSignature.returnTypeDesc.type.memberTypeDesc))) {
-                throw new Error(INVALID_PARAMETER_TYPE.message);
-            }
         } else {
             if (!STKindChecker.isSimpleNameReference(fnSt.functionSignature.returnTypeDesc.type) &&
-                !STKindChecker.isQualifiedNameReference(fnSt.functionSignature.returnTypeDesc.type)) {
+                !STKindChecker.isQualifiedNameReference(fnSt.functionSignature.returnTypeDesc.type) &&
+                !isPrimitiveTypeDesc(fnSt.functionSignature.returnTypeDesc.type)) {
                 throw new Error(INVALID_PARAMETER_TYPE.message);
             }
         }
@@ -291,7 +320,24 @@ export async function getParamDefinitions(
             throw new Error(INVALID_RECORD_UNION_TYPE.message);
         }
 
-        const outputDefinition = navigateTypeInfo('types' in outputTypeDefinition && outputTypeDefinition.types[0].type.fields, false);
+        let outputDefinition: RecordDefinitonObject;
+        if (outputType?.fields) {
+            outputDefinition = navigateTypeInfo(outputType.fields, false);
+        } else {
+            outputDefinition = {
+                "recordFields": { 0: { "type": returnType.source.trim(), "comment": "" } },
+                "recordFieldsMetadata": {
+                    0: {
+                        "typeName": returnType.source.trim(),
+                        "type": returnType.source.trim(),
+                        "typeInstance": "0",
+                        "nullable": false,
+                        "optional": false
+                    }
+                }
+            };
+        }
+
         output = { ...outputDefinition.recordFields };
         outputMetadata = { ...outputDefinition.recordFieldsMetadata };
 
@@ -325,31 +371,57 @@ export async function processMappings(
         parameterDefinitions = mappedResult as ParameterMetadata;
     }
 
-    const codeObject = await getDatamapperCode(parameterDefinitions);
-    const { recordString, isCheckError } = await constructRecord(codeObject);
     let codeString: string;
     const parameter = fnSt.functionSignature.parameters[0] as RequiredParam;
     const paramName = parameter.paramName.value;
-    const formattedRecordString = recordString.startsWith(":") ? recordString.substring(1) : recordString;
-
     let returnType = fnSt.functionSignature.returnTypeDesc.type;
 
-    if (STKindChecker.isUnionTypeDesc(returnType)) {
-        const { leftTypeDesc: leftType, rightTypeDesc: rightType } = returnType;
+    const getTypeConversionInfo = (paramName: string) => {
+        let inputType = parameterDefinitions.inputMetadata[paramName].parameterType;
+        let outputType = parameterDefinitions.outputMetadata[0].typeName;
+        inputType = transformNullableType(inputType);
+        outputType = transformNullableType(outputType);
+        const bothPrimitive = (isPrimitiveType(outputType) || isNullablePrimitiveType(outputType)) && (isPrimitiveType(inputType) || isNullablePrimitiveType(inputType));
+        const bothPrimitiveArray = isPrimitiveArrayType(outputType) && isPrimitiveArrayType(inputType);
+        const path = applyTypeConversion(inputType, outputType, inputType, outputType, paramName, bothPrimitive, bothPrimitiveArray);
+        return { path, hasError: path.includes("check ") };
+    };
 
-        if (STKindChecker.isArrayTypeDesc(leftType) || STKindChecker.isArrayTypeDesc(rightType)) {
-            codeString = isCheckError && !isErrorExists
-                ? `|error => from var ${paramName}Item in ${paramName}\n select ${formattedRecordString};`
-                : `=> from var ${paramName}Item in ${paramName}\n select ${formattedRecordString};`;
+    const getRecordInfo = async () => {
+        const codeObject = await getDatamapperCode(parameterDefinitions);
+        const { recordString, isCheckError } = await constructRecord(codeObject);
+        const formattedRecordString = recordString.startsWith(":") ? recordString.substring(1) : recordString;
+        return { recordString, formattedRecordString, isCheckError };
+    };
+
+    if (STKindChecker.isArrayTypeDesc(returnType)) {
+        if (STKindChecker.isArrayTypeDesc(parameter.typeName) && isPrimitiveTypeDesc(parameter.typeName.memberTypeDesc)) {
+            // Array with primitive
+            const { path, hasError } = getTypeConversionInfo(`${paramName}Item`);
+            codeString = `${hasError ? "|error " : ""}=> from var ${paramName}Item in ${paramName}\n select ${path};`;
         } else {
-            codeString = isCheckError && !isErrorExists ? `|error => ${recordString};` : `=> ${recordString};`;
+            // Array with non-primitive
+            const { formattedRecordString, isCheckError } = await getRecordInfo();
+            codeString = `${isCheckError ? "|error " : ""}=> from var ${paramName}Item in ${paramName}\n select ${formattedRecordString};`;
         }
-    } else if (STKindChecker.isArrayTypeDesc(returnType)) {
-        codeString = isCheckError
-            ? `|error => from var ${paramName}Item in ${paramName}\n select ${formattedRecordString};`
-            : `=> from var ${paramName}Item in ${paramName}\n select ${formattedRecordString};`;
+    } else if (isPrimitiveTypeDesc(returnType)) {
+        // Primitive
+        const { path, hasError } = getTypeConversionInfo(paramName);
+        codeString = `${hasError ? "|error " : ""}=> ${path};`;
     } else {
-        codeString = isCheckError ? `|error => ${recordString};` : `=> ${recordString};`;
+        // Non-primitive
+        const { recordString, formattedRecordString, isCheckError } = await getRecordInfo();
+        if (STKindChecker.isUnionTypeDesc(returnType)) {
+            const { leftTypeDesc: leftType, rightTypeDesc: rightType } = returnType;
+            const hasArrayType = STKindChecker.isArrayTypeDesc(leftType) || STKindChecker.isArrayTypeDesc(rightType);
+            const errorPrefix = isCheckError && !isErrorExists ? "|error " : "";
+            
+            codeString = hasArrayType 
+                ? `${errorPrefix}=> from var ${paramName}Item in ${paramName}\n select ${formattedRecordString};`
+                : `${errorPrefix}=> ${recordString};`;
+        } else {
+            codeString = `${isCheckError ? "|error " : ""}=> ${recordString};`;
+        }
     }
 
     const modifications: STModification[] = [];
@@ -583,29 +655,6 @@ async function getMappingString(mapping: MappingData, parameterDefinitions: Para
             return `(${path}).length()`;
         }
 
-        // Type conversion logic
-        const stringConversions: Record<string, string> = {
-            int: "check int:fromString",
-            float: "check float:fromString",
-            decimal: "check decimal:fromString",
-            boolean: "check boolean:fromString"
-        };
-
-        const numericConversions: { [key: string]: Record<string, string> } = {
-            float: {
-                int: `check (${path}).ensureType()`,
-                decimal: `check (${path}).ensureType()`
-            },
-            int: {
-                float: `check (${path}).ensureType()`,
-                decimal: `check (${path}).ensureType()`
-            },
-            decimal: {
-                int: `check (${path}).ensureType()`,
-                float: `check (${path}).ensureType()`
-            }
-        };
-
         function convertUnionTypes(inputType: string, targetType: string, variablePath: string): string {
             const inputTypes = inputType.split("|").filter(isPrimitiveType);
             const isStringInput = inputTypes.includes(PrimitiveType.STRING);
@@ -629,32 +678,21 @@ async function getMappingString(mapping: MappingData, parameterDefinitions: Para
         isOutputNullableArray = outputObject.nullableArray;
         isInputNullableArray = modifiedInput.nullableArray;
 
-        const isStringInput = ["string", "string|()"].includes(inputTypeName);
-        const isStringTarget = ["string", "string|()"].includes(targetType);
-        if (isPrimitiveType(baseTargetType) && isPrimitiveType(baseType)) {
-            if (inputTypeName === targetType || inputTypeName === baseTargetType) {
-                path = `${path}`;
-            } else if (isStringInput) {
-                const conversion = stringConversions[baseTargetType];
-                if (conversion) {
-                    path = `${conversion}(${path})`;
-                } else if (!isStringTarget) {
-                    return "";
-                }
-            } else if (isStringTarget) {
-                path = `(${path}).toString()`;
-            } else {
-                const conversion = numericConversions[inputTypeName]?.[targetType];
-                if (conversion && baseTargetType !== PrimitiveType.BOOLEAN) {
-                    path = conversion;
-                } else if (baseType === baseTargetType) {
-                    path = `${path}`;
-                } else if ((targetType.includes("|()") && inputTypeName !== baseTargetType) || inputTypeName.includes("|()") && baseTargetType !== PrimitiveType.BOOLEAN) {
-                    path = `check (${path}).ensureType()`;
-                } else {
-                    return "";
-                }
-            }
+        const bothPrimitive = isPrimitiveType(baseTargetType) && isPrimitiveType(baseType);
+        const bothPrimitiveArray = isPrimitiveArrayType(baseTargetType) && isPrimitiveArrayType(baseType);
+
+        if (bothPrimitive || bothPrimitiveArray) {
+            path = applyTypeConversion(
+                baseType,
+                baseTargetType,
+                inputTypeName,
+                targetType,
+                path,
+                bothPrimitive,
+                bothPrimitiveArray,
+                nestedKey,
+                isInputNullableArray
+            );
         } else if (isUnionEnumIntersectionType(inputType)) {
             if (isUnionType(baseType)) {
                 path = convertUnionTypes(baseType, baseTargetType, path);
@@ -1539,7 +1577,10 @@ async function accessMetadata(
                 newPath[index - 1] = `${paths[index - 1]}?`;
             }
             if (!isPrimitiveType(baseType) && baseType.includes("[]")) {
-                defaultValue = (!inputObject.nullableArray || outputObject.nullableArray) ? `[]` : undefined;
+                if (!isPrimitiveArrayType(baseType)) {
+                    defaultValue = (!inputObject.nullableArray || outputObject.nullableArray) ? `[]` : undefined;
+                }
+                defaultValue = (inputObject.nullable || inputObject.optional || inputObject.nullableArray) ? `[]` : undefined;
             } else {
                 const typeToUse = !isPrimitiveType(baseType)
                     ? baseType.replace(/[\[\]()]*/g, "").split("|")[0].trim()
@@ -1560,11 +1601,14 @@ async function accessMetadata(
             }
 
             // Handle nullable/optional input
-            const shouldUseDefault = (
-                (!outputObject.nullable && !outputObject.optional && !inputObject.nullableArray && outputObject.nullableArray) ||
-                (!outputObject.nullable && !outputObject.optional && (baseType === PrimitiveType.STRING || baseType === baseTargetType)) ||
-                (baseType !== baseTargetType && baseType === PrimitiveType.STRING)
-            );
+            const shouldUseDefault = isPrimitiveArrayType(baseType) && isPrimitiveArrayType(baseTargetType)
+                ? (inputObject.nullable || inputObject.optional || inputObject.nullableArray)
+                : (
+                    (!outputObject.nullable && !outputObject.optional && !inputObject.nullableArray && outputObject.nullableArray) ||
+                    (!outputObject.nullable && !outputObject.optional && (baseType === PrimitiveType.STRING || baseType === baseTargetType)) ||
+                    (baseType !== baseTargetType && baseType === PrimitiveType.STRING)
+                );
+
             newPath[index] = shouldUseDefault ? `${pathIndex}?:${defaultValue}` : `${pathIndex}`;
             return newPath;
         }
@@ -1603,6 +1647,106 @@ async function getDefaultValue(dataType: string): Promise<string> {
             return "void";
     }
 }
+
+const applyTypeConversion = (
+    baseType: string,
+    baseTargetType: string,
+    inputTypeName: string,
+    targetType: string,
+    path: string,
+    bothPrimitive: boolean,
+    bothPrimitiveArray: boolean,
+    nestedKey?: string,
+    isInputNullableArray?: boolean
+): string => {
+    const isStringInput = inputTypeName.includes("string");
+    const isStringTarget = targetType.includes("string");
+
+    // Type conversion logic
+    const stringConversions: Record<string, string> = {
+        int: "check int:fromString",
+        float: "check float:fromString", 
+        decimal: "check decimal:fromString",
+        boolean: "check boolean:fromString"
+    };
+
+    const numericConversions: { [key: string]: Record<string, string> } = {
+        float: {
+            int: `check (${path}).ensureType()`,
+            decimal: `check (${path}).ensureType()`
+        },
+        int: {
+            float: `check (${path}).ensureType()`,
+            decimal: `check (${path}).ensureType()`
+        },
+        decimal: {
+            int: `check (${path}).ensureType()`,
+            float: `check (${path}).ensureType()`
+        }
+    };
+
+    if (bothPrimitive || bothPrimitiveArray) {
+        // For arrays, extract element types
+        const sourceElementType = bothPrimitiveArray ? baseType.replace(/[()|\[\]]/g, '').split('').join('') : inputTypeName;
+        const targetElementType = bothPrimitiveArray ? baseTargetType.replace(/[()|\[\]]/g, '').split('').join('') : targetType;
+
+        const wrapForArray = (expression: string): string => {
+            if (bothPrimitiveArray && nestedKey) {
+                if (baseType !== baseTargetType && isStringInput && isInputNullableArray) {
+                    return `from var ${nestedKey}Item in ${path}\nselect ${expression.replace(path, `${nestedKey}Item.toString()`)}`;
+                }
+                return `from var ${nestedKey}Item in ${path}\nselect ${expression.replace(path, `${nestedKey}Item`)}`;
+            } 
+            return expression;
+        };
+
+        // Direct type match
+        if ((bothPrimitive && (inputTypeName === targetType || inputTypeName === baseTargetType)) ||
+            (bothPrimitiveArray && (baseType === baseTargetType || sourceElementType === targetElementType))) {
+            path = wrapForArray(path);
+        } 
+        // String input conversions
+        else if ((bothPrimitive || bothPrimitiveArray) && isStringInput) {
+            const conversionKey = bothPrimitiveArray ? targetElementType : baseTargetType;
+            const conversion = stringConversions[conversionKey];
+            if (conversion && sourceElementType !== targetElementType) {
+                path = wrapForArray(`${conversion}(${path}.toString())`);
+            } else if (conversion && sourceElementType !== targetElementType) {
+                path = wrapForArray(`${conversion}(${path})`);
+            } else if ((bothPrimitive || bothPrimitiveArray) && !isStringTarget) {
+                return "";
+            }
+        }
+        // String target conversions
+        else if ((bothPrimitive || bothPrimitiveArray) && isStringTarget) {
+            path = wrapForArray(`(${path}).toString()`);
+        }
+        // Numeric conversions and other cases
+        else {
+            const sourceForConversion = bothPrimitiveArray ? sourceElementType : inputTypeName;
+            const targetForConversion = bothPrimitiveArray ? targetElementType : targetType;
+            const baseTargetForCheck = bothPrimitiveArray ? targetElementType : baseTargetType;
+            
+            const conversion = numericConversions[sourceForConversion]?.[targetForConversion];
+            if (conversion && baseTargetForCheck !== PrimitiveType.BOOLEAN) {
+                path = bothPrimitiveArray ? conversion : conversion;
+            } else if ((bothPrimitive && baseType === baseTargetType) || 
+                      (bothPrimitiveArray && sourceElementType === targetElementType)) {
+                path = wrapForArray(path);
+            } else if ((bothPrimitive && ((targetType.includes("|()") && inputTypeName !== baseTargetType) || 
+                       (inputTypeName.includes("|()") && baseTargetType !== PrimitiveType.BOOLEAN))) ||
+                      (bothPrimitiveArray && ((baseTargetType.includes("|()") && sourceElementType !== targetElementType) ||
+                       (baseType.includes("|()") && targetElementType !== PrimitiveType.BOOLEAN)))) {
+                path = wrapForArray(`check (${path}).ensureType()`);
+            } else {
+                return "";
+            }
+        }
+    } else {
+        return "";
+    }
+    return path;
+};
 
 async function getNestedType(paths: string[], metadata: ParameterField | FieldMetadata): Promise<FieldMetadata> {
     let currentMetadata = metadata;
@@ -1888,4 +2032,178 @@ export function cleanDiagnosticMessages(entries: DiagnosticEntry[]): DiagnosticE
         code: entry.code || "",
         message: entry.message,
     }));
+}
+
+// Processes existing functions to find a matching function by name
+export async function processExistingFunctions(
+    existingFunctions: ComponentInfo[],
+    functionName: string,
+    functionContents: Record<string, string>
+): Promise<{
+    match: RegExpMatchArray | null;
+    functionNameMatch: boolean;
+    matchingFunctionFile: string | null;
+}> {
+    for (const func of existingFunctions) {
+        const functionContent = functionContents[func.filePath];
+        if (!functionContent) {
+            continue;
+        }
+
+        const fileName = func.filePath.split("/").pop();
+        const contentLines = functionContent.split("\n");
+        // Filter out commented lines (both // and # style comments)
+        const nonCommentedLines = contentLines.filter((line) => {
+            const trimmedLine = line.trim();
+            return !(trimmedLine.startsWith("//") || trimmedLine.startsWith("#"));
+        });
+        const cleanContent = nonCommentedLines.join("\n");
+
+        const signatureRegex = /function\s+(\w+)\s*\(([^)]*)\)\s*returns\s+([^{=]+)(?:\s*=>\s*)?/g;
+
+        // Use matchAll to find all function signatures in the content
+        const matches = [...cleanContent.matchAll(signatureRegex)];
+
+        // Check if any of the function signatures match the target function name
+        for (const match of matches) {
+            const funcName = match[1];
+            if (funcName === functionName) {
+                return {
+                    match,
+                    functionNameMatch: true,
+                    matchingFunctionFile: fileName,
+                };
+            }
+        }
+    }
+
+    // If no match is found
+    return {
+        match: null,
+        functionNameMatch: false,
+        matchingFunctionFile: null,
+    };
+}
+
+// Handle different nullable patterns
+function transformNullableType(recordName: string): string {    
+    // Pattern: string?[]? -> (string|())|()
+    if (/^(.+)\?\[\]\?$/.test(recordName)) {
+        const baseType = recordName.match(/^(.+)\?\[\]\?$/)?.[1];
+        return `(${baseType}|()|())`;
+    }
+    
+    // Pattern: string[]? -> string[]|()
+    if (/^(.+)\[\]\?$/.test(recordName)) {
+        const baseType = recordName.match(/^(.+)\[\]\?$/)?.[1];
+        return `${baseType}[]|()`;
+    }
+    
+    // Pattern: string?[] -> (string|())[]
+    if (/^(.+)\?\[\]$/.test(recordName)) {
+        const baseType = recordName.match(/^(.+)\?\[\]$/)?.[1];
+        return `(${baseType}|())[]`;
+    }
+    
+    // Pattern: string? -> string|()
+    if (/^(.+)\?$/.test(recordName)) {
+        const baseType = recordName.match(/^(.+)\?$/)?.[1];
+        return `${baseType}|()`;
+    }
+    
+    // No nullable syntax found, return as is
+    return recordName;
+}
+
+export function processRecordReference(
+    recordName: string,
+    recordMap: Record<string, any>,
+    allImports: Array<{ moduleName: string; alias?: string }>,
+    importsMap: Record<string, { moduleName: string; alias?: string; recordName: string }>
+): DataMappingRecord {
+    let transformedRecordName = transformNullableType(recordName);
+
+    const isArray = transformedRecordName.includes("[]");
+    const cleanedRecordName = transformedRecordName.replace(/\[\]$/, "");
+
+    // Check for primitive/null primitive types
+    if (isPrimitiveType(cleanedRecordName) || isNullablePrimitiveType(cleanedRecordName) || isPrimitiveArrayType(cleanedRecordName)) {
+        return { type: `${recordName}`, isArray, filePath: null };
+    }
+    const rec =  recordMap[cleanedRecordName];
+
+    if (!rec) {
+        if (cleanedRecordName.includes(":")) {
+            if (!cleanedRecordName.includes("/")) {
+                const [moduleName, recordName] = cleanedRecordName.split(":");
+                const matchedImport = allImports.find((imp) => {
+                    if (imp.alias) {
+                        return cleanedRecordName.startsWith(imp.alias);
+                    }
+                    const moduleNameParts = imp.moduleName.split(/[./]/);
+                    const inferredAlias = moduleNameParts[moduleNameParts.length - 1];
+                    return cleanedRecordName.startsWith(inferredAlias);
+                });
+
+                if (!matchedImport) {
+                    throw new Error (INVALID_RECORD_REFERENCE.message);
+                }
+                importsMap[cleanedRecordName] = {
+                    moduleName: matchedImport.moduleName,
+                    alias: matchedImport.alias,
+                    recordName: recordName,
+                };
+            } else {
+                const [moduleName, recordName] = cleanedRecordName.split(":");
+                importsMap[cleanedRecordName] = {
+                    moduleName: moduleName,
+                    recordName: recordName,
+                };
+            }
+            return { type: `${cleanedRecordName}`, isArray, filePath: null };
+        } else {
+            throw new Error(`${cleanedRecordName} is not defined.`);
+        }
+    }
+    return { ...rec, isArray };
+}
+
+// Process input parameters
+export function processInputs(
+    inputParams: string[],
+    recordMap: Record<string, any>,
+    allImports: ImportStatement[],
+    importsMap: Record<string, any>
+) {
+    let results = inputParams.map((param: string) =>
+        processRecordReference(param, recordMap, allImports, importsMap)
+    );
+    return results.filter((result): result is DataMappingRecord => {
+        if (result instanceof Error) {
+            throw INVALID_RECORD_REFERENCE;
+        }
+        return true;
+    });
+}
+
+// Process Output parameters
+export function processOutput(
+    outputParam: string,
+    recordMap: Record<string, any>,
+    allImports: { moduleName: string; alias?: string }[],
+    importsMap: Record<string, any>
+) {
+    const parts = outputParam.split("|");
+    const validParts = parts.filter((name: string) => name !== "error");
+    if (validParts.length > 1) {
+        throw new Error(
+            `Invalid output parameter: "${outputParam}". Union types are not supported. Please provide a single valid record name.`
+        );
+    }
+    const cleanedOutputRecordName = validParts.length > 0 ? validParts[0] : "error";
+    const outputResult = processRecordReference(cleanedOutputRecordName, recordMap, allImports, importsMap);
+    if (outputResult instanceof Error) {
+        throw INVALID_RECORD_REFERENCE;
+    }
+    return outputResult;
 }

@@ -32,8 +32,12 @@ import {
     DiagnosticEntry,
     Diagnostics,
     ExpandedDMModel,
+    ExtractMappingDetailsRequest,
+    ExtractMappingDetailsResponse,
     FetchDataRequest,
     FetchDataResponse,
+    FunctionMergeParams,
+    FunctionMergeResult,
     GenerateCodeRequest,
     GenerateMappingFromRecordResponse,
     GenerateMappingsFromRecordRequest,
@@ -44,6 +48,7 @@ import {
     GenerateTypesFromRecordResponse,
     GetFromFileRequest,
     GetModuleDirParams,
+    ImportStatement,
     InlineAllDataMapperSourceRequest,
     InlineDataMapperModelResponse,
     LLMDiagnostics,
@@ -113,7 +118,7 @@ import {
 } from "./constants";
 import { processInlineMappings } from "./inline-utils";
 import { attemptRepairProject, checkProjectDiagnostics } from "./repair-utils";
-import { AIPanelAbortController, cleanDiagnosticMessages, handleStop, isErrorCode, requirementsSpecification, searchDocumentation } from "./utils";
+import { AIPanelAbortController, cleanDiagnosticMessages, handleStop, isErrorCode, processExistingFunctions, processInputs, processOutput, requirementsSpecification, searchDocumentation } from "./utils";
 import { fetchData } from "./utils/fetch-data-utils";
 
 export class AiPanelRpcManager implements AIPanelAPI {
@@ -873,6 +878,188 @@ export class AiPanelRpcManager implements AIPanelAPI {
             console.error(">>> Failed to add inline code segment to the workspace", error);
             throw error;
         }
+    }
+
+    async extractMappingDetails(params: ExtractMappingDetailsRequest): Promise<ExtractMappingDetailsResponse> {
+        const { parameters, recordMap, projectImports, existingFunctions, functionContents } = params;
+        const importsMap: Record<string, ImportStatement> = {};
+        let inputParams: string[];
+        let outputParam: string;
+        let inputNames: string[] = [];
+
+        // Validate function name against existing functions
+        const existingFunctionMatch = await processExistingFunctions(
+            existingFunctions,
+            parameters.functionName,
+            functionContents
+        );
+
+        if (parameters.inputRecord.length > 0 || parameters.outputRecord !== "") {
+            if (existingFunctionMatch.functionNameMatch) {
+                throw new Error(
+                    `"${parameters.functionName}" function already exists. Please provide a valid function name.`
+                );
+            }
+            inputParams = parameters.inputRecord;
+            outputParam = parameters.outputRecord;
+        } else {
+            if (!existingFunctionMatch.functionNameMatch) {
+                throw new Error(
+                    `"${parameters.functionName}" function was not found. Please provide a valid function name.`
+                );
+            }
+            const result = existingFunctionMatch.match[2].split(/,\s*/).map((param) => param.trim().split(/\s+/));
+            inputParams = result.map((parts) => parts[0]);
+            inputNames = result.map((parts) => parts[1]);
+            outputParam = existingFunctionMatch.match[3].trim();
+        }
+
+        // Flatten imports
+        const allImports: ImportStatement[] = [];
+        projectImports.forEach((file) => {
+            if (file.statements && file.statements.length > 0) {
+                file.statements.forEach((statement: ImportStatement) => {
+                    allImports.push(statement);
+                });
+            }
+        });
+
+        // Process inputs/outputs
+        const inputs = processInputs(inputParams, recordMap, allImports, importsMap);
+        const output = processOutput(outputParam, recordMap, allImports, importsMap);
+
+        return {
+            inputs,
+            output,
+            inputParams,
+            outputParam,
+            imports: Object.values(importsMap),
+            inputNames,
+            existingFunctionMatch
+        };
+    }
+
+    async mergeCodeSegmentWithExistingFile(params: FunctionMergeParams): Promise<FunctionMergeResult> {
+        const { originalContent, segmentText, functionInfo } = params;
+
+        const importRegex = /import\s+[^;]+;/g;
+
+        const segmentImports = segmentText.match(importRegex) || [];
+        const segmentCodeWithoutImports = segmentText.replace(importRegex, '').trim();
+        const originalLines = originalContent.split('\n');
+
+        // Find existing comments at the top
+        let commentsEndIndex = 0;
+        for (let i = 0; i < originalLines.length; i++) {
+            const line = originalLines[i].trim();
+            if (line.startsWith('//') || line.startsWith('#')) {
+                commentsEndIndex = i + 1;
+            } else if (line === '') {
+                continue; // Skip empty lines between comments
+            } else {
+                break;
+            }
+        }
+
+        // Find existing imports
+        let importsStartIndex = commentsEndIndex;
+        let importsEndIndex = commentsEndIndex;
+
+        for (let i = commentsEndIndex; i < originalLines.length; i++) {
+            const line = originalLines[i].trim();
+            if (line.startsWith('import ')) {
+                if (importsStartIndex === commentsEndIndex) {
+                    importsStartIndex = i;
+                }
+                importsEndIndex = i + 1;
+            } else if (line === '') {
+                continue; // Skip empty lines
+            } else if (line.startsWith('//') || line.startsWith('#')) {
+                continue; // Skip comments between imports
+            } else {
+                break;
+            }
+        }
+
+        // Extract existing imports
+        const existingImports = originalLines.slice(importsStartIndex, importsEndIndex)
+            .filter(line => line.trim().startsWith('import '))
+            .map(line => line.trim());
+
+        // Merge imports (avoid duplicates)
+        const allImports = [...existingImports];
+        segmentImports.forEach(newImport => {
+            const cleanImport = newImport.trim();
+            if (!allImports.includes(cleanImport)) {
+                allImports.push(cleanImport);
+            }
+        });
+
+        // Handle function replacement or addition
+        let shouldReplaceFunction = false;
+        let functionStartIndex = -1;
+        let functionEndIndex = -1;
+
+        if (functionInfo && functionInfo.length > 0) {
+            const funcInfo = functionInfo[0];
+            functionStartIndex = funcInfo.startLine;
+            functionEndIndex = funcInfo.endLine;
+
+            // Validate line numbers and check if function exists
+            if (functionStartIndex >= 0 && functionEndIndex < originalLines.length &&
+                functionStartIndex <= functionEndIndex) {
+
+                const existingFunctionLines = originalLines.slice(functionStartIndex, functionEndIndex + 1);
+                const existingFunctionContent = existingFunctionLines.join('\n');
+
+                shouldReplaceFunction = existingFunctionContent.trim().length > 0 &&
+                    existingFunctionContent.includes('function') &&
+                    existingFunctionContent.includes(funcInfo.name);
+            }
+        }
+
+        let mergedContent = '';
+
+        // 1. Add comments section
+        if (commentsEndIndex > 0) {
+            mergedContent += originalLines.slice(0, commentsEndIndex).join('\n') + '\n\n';
+        }
+
+        // 2. Add merged imports
+        if (allImports.length > 0) {
+            mergedContent += allImports.join('\n') + '\n\n';
+        }
+
+        // 3. Add the rest of the content
+        let codeStartIndex = Math.max(importsEndIndex, commentsEndIndex);
+
+        if (shouldReplaceFunction) {
+            // Replace existing function
+            const beforeFunction = originalLines.slice(codeStartIndex, functionStartIndex);
+            const afterFunction = originalLines.slice(functionEndIndex + 1);
+
+            // Clean up empty lines
+            const beforeFunctionClean = beforeFunction.join('\n').trim();
+            const afterFunctionClean = afterFunction.join('\n').trim();
+
+            if (beforeFunctionClean) {
+                mergedContent += beforeFunctionClean + '\n\n';
+            }
+            mergedContent += segmentCodeWithoutImports;
+            if (afterFunctionClean) {
+                mergedContent += '\n\n' + afterFunctionClean;
+            }
+        } else {
+            // Add function to the end
+            const existingCode = originalLines.slice(codeStartIndex).join('\n').trim();
+            if (existingCode) {
+                mergedContent += existingCode + '\n\n';
+            }
+            mergedContent += segmentCodeWithoutImports;
+        }
+        return {
+            mergedContent: mergedContent.trim()
+        };
     }
 }
 
