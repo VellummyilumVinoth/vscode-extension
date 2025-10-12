@@ -23,10 +23,12 @@ import { AIMachineEventType, LoginMethod } from "@wso2/ballerina-core";
 
 export const ANTHROPIC_HAIKU = "claude-3-5-haiku-20241022";
 export const ANTHROPIC_SONNET_4 = "claude-sonnet-4-20250514";
+export const ANTHROPIC_SONNET_4_5 = "claude-sonnet-4-5-20250929";
 
 type AnthropicModel =
     | typeof ANTHROPIC_HAIKU
-    | typeof ANTHROPIC_SONNET_4;
+    | typeof ANTHROPIC_SONNET_4
+    | typeof ANTHROPIC_SONNET_4_5;
 
 /**
  * Maps AWS regions to their corresponding Bedrock inference profile prefixes
@@ -140,6 +142,7 @@ export const getAnthropicClient = async (model: AnthropicModel): Promise<any> =>
             const baseModelMap: Record<AnthropicModel, string> = {
                 [ANTHROPIC_HAIKU]: "anthropic.claude-3-5-haiku-20241022-v1:0",
                 [ANTHROPIC_SONNET_4]: "anthropic.claude-sonnet-4-20250514-v1:0",
+                [ANTHROPIC_SONNET_4_5]: "anthropic.claude-sonnet-4-5-20250929-v1:0",
             };
             
             const baseModelId = baseModelMap[model];

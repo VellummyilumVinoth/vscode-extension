@@ -32,6 +32,7 @@ import {
     checkSyntaxError,
     clearInitialPrompt,
     CodeSegment,
+    createTempBallerinaDir,
     createTempFileAndGenerateMetadata,
     CreateTempFileRequest,
     createTestDirecoryIfNotExists,
@@ -41,8 +42,11 @@ import {
     DeleteFromProjectRequest,
     DeveloperDocument,
     DocGenerationRequest,
+    extractMappingDetails,
+    ExtractMappingDetailsRequest,
     fetchData,
     FetchDataRequest,
+    FunctionDefinitionFromSyntaxTree,
     generateCode,
     GenerateCodeRequest,
     generateDataMapperModel,
@@ -56,6 +60,7 @@ import {
     getAccessToken,
     getActiveFile,
     getAIMachineSnapshot,
+    getAllImports,
     getBackendUrl,
     getContentFromFile,
     getDefaultPrompt,
@@ -64,6 +69,7 @@ import {
     getFromDocumentation,
     getFromFile,
     GetFromFileRequest,
+    getFunctionDefinitionFromSyntaxTree,
     getGeneratedDocumentation,
     getGeneratedTests,
     getLoginMethod,
@@ -85,8 +91,6 @@ import {
     isRequirementsSpecificationFileExist,
     markAlertShown,
     MetadataWithAttachments,
-    notifyAIMappings,
-    NotifyAIMappingsRequest,
     openAIMappingChatWindow,
     postProcess,
     PostProcessRequest,
@@ -95,13 +99,18 @@ import {
     promptWSO2AILogout,
     readDeveloperMdFile,
     RelevantLibrariesAndFunctionsRequest,
+    repairAndCheckDiagnostics,
+    repairCodeAndGetUpdatedContent,
+    RepairCodeParams,
+    repairCodeRequest,
+    repairCodeWithLLM,
     repairGeneratedCode,
     RepairParams,
     RequirementSpecification,
     showSignInAlert,
-    stopAIMappings,
     submitFeedback,
     SubmitFeedbackRequest,
+    TempDirectoryPath,
     TestGenerationRequest,
     TestGenerationResponse,
     TestGeneratorIntermediaryState,
@@ -126,11 +135,10 @@ export function registerAiPanelRpcHandlers(messenger: Messenger) {
     messenger.onRequest(getFromFile, (args: GetFromFileRequest) => rpcManger.getFromFile(args));
     messenger.onRequest(getFileExists, (args: GetFromFileRequest) => rpcManger.getFileExists(args));
     messenger.onNotification(deleteFromProject, (args: DeleteFromProjectRequest) => rpcManger.deleteFromProject(args));
-    messenger.onRequest(notifyAIMappings, (args: NotifyAIMappingsRequest) => rpcManger.notifyAIMappings(args));
-    messenger.onRequest(stopAIMappings, () => rpcManger.stopAIMappings());
     messenger.onRequest(getShadowDiagnostics, (args: ProjectSource) => rpcManger.getShadowDiagnostics(args));
     messenger.onRequest(checkSyntaxError, (args: ProjectSource) => rpcManger.checkSyntaxError(args));
     messenger.onNotification(clearInitialPrompt, () => rpcManger.clearInitialPrompt());
+    messenger.onRequest(getAllImports, () => rpcManger.getAllImports());
     messenger.onNotification(openAIMappingChatWindow, (args: DataMapperModelResponse) => rpcManger.openAIMappingChatWindow(args));
     messenger.onRequest(generateDataMapperModel, (args: DatamapperModelContext) => rpcManger.generateDataMapperModel(args));
     messenger.onRequest(getTypesFromRecord, (args: GenerateTypesFromRecordRequest) => rpcManger.getTypesFromRecord(args));
@@ -138,6 +146,12 @@ export function registerAiPanelRpcHandlers(messenger: Messenger) {
     messenger.onRequest(generateMappings, (args: MetadataWithAttachments) => rpcManger.generateMappings(args));
     messenger.onRequest(addCodeSegmentToWorkspace, (args: CodeSegment) => rpcManger.addCodeSegmentToWorkspace(args));
     messenger.onNotification(addInlineCodeSegmentToWorkspace, (args: CodeSegment) => rpcManger.addInlineCodeSegmentToWorkspace(args));
+    messenger.onRequest(repairAndCheckDiagnostics, (args: TempDirectoryPath) => rpcManger.repairAndCheckDiagnostics(args));
+    messenger.onRequest(createTempBallerinaDir, () => rpcManger.createTempBallerinaDir());
+    messenger.onRequest(repairCodeWithLLM, (args: repairCodeRequest) => rpcManger.repairCodeWithLLM(args));
+    messenger.onRequest(extractMappingDetails, (args: ExtractMappingDetailsRequest) => rpcManger.extractMappingDetails(args));
+    messenger.onRequest(getFunctionDefinitionFromSyntaxTree, (args: FunctionDefinitionFromSyntaxTree) => rpcManger.getFunctionDefinitionFromSyntaxTree(args));
+    messenger.onRequest(repairCodeAndGetUpdatedContent, (args: RepairCodeParams) => rpcManger.repairCodeAndGetUpdatedContent(args));
     messenger.onRequest(getGeneratedTests, (args: TestGenerationRequest) => rpcManger.getGeneratedTests(args));
     messenger.onRequest(getTestDiagnostics, (args: TestGenerationResponse) => rpcManger.getTestDiagnostics(args));
     messenger.onRequest(getServiceSourceForName, (args: string) => rpcManger.getServiceSourceForName(args));

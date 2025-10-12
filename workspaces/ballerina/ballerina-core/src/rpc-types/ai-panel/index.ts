@@ -15,9 +15,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { AllDataMapperSourceRequest, CreateTempFileRequest, DatamapperModelContext, DataMapperModelResponse, ExtendedDataMapperMetadata, MetadataWithAttachments } from "../../interfaces/extended-lang-client";
+import { FunctionDefinition } from "@wso2/syntax-tree";
+import { AllDataMapperSourceRequest, DataMapperModelResponse, ExtendedDataMapperMetadata } from "../../interfaces/extended-lang-client";
 import { LoginMethod } from "../../state-machine-types";
-import { AddToProjectRequest, GetFromFileRequest, DeleteFromProjectRequest, GenerateMappingsResponse, NotifyAIMappingsRequest, ProjectSource, ProjectDiagnostics, PostProcessRequest, PostProcessResponse, GenerateTypesFromRecordRequest, GenerateTypesFromRecordResponse, FetchDataRequest, FetchDataResponse, TestGenerationRequest, TestGenerationResponse, TestGenerationMentions, AIChatSummary, DeveloperDocument, RequirementSpecification, LLMDiagnostics, GetModuleDirParams, AIPanelPrompt, AIMachineSnapshot, SubmitFeedbackRequest, RelevantLibrariesAndFunctionsRequest, GenerateOpenAPIRequest, GenerateCodeRequest, TestPlanGenerationRequest, TestGeneratorIntermediaryState, RepairParams, RelevantLibrariesAndFunctionsResponse, CodeSegment, DocGenerationRequest, AddFilesToProjectRequest } from "./interfaces";
+import { AddToProjectRequest, GetFromFileRequest, DeleteFromProjectRequest, ProjectSource, ProjectDiagnostics, PostProcessRequest, PostProcessResponse, GenerateTypesFromRecordRequest, GenerateTypesFromRecordResponse, FetchDataRequest, FetchDataResponse, TestGenerationRequest, TestGenerationResponse, TestGenerationMentions, AIChatSummary, DeveloperDocument, RequirementSpecification, LLMDiagnostics, GetModuleDirParams, AIPanelPrompt, AIMachineSnapshot, SubmitFeedbackRequest, RelevantLibrariesAndFunctionsRequest, GenerateOpenAPIRequest, GenerateCodeRequest, TestPlanGenerationRequest, TestGeneratorIntermediaryState, RepairParams, RelevantLibrariesAndFunctionsResponse, CodeSegment, DocGenerationRequest, AddFilesToProjectRequest, TempDirectoryPath, ExtractMappingDetailsRequest, ExtractMappingDetailsResponse, FunctionDefinitionFromSyntaxTree, RepairCodeParams, RepairedFilesContent, ProjectImports, repairCodeRequest, MetadataWithAttachments, CreateTempFileRequest, DatamapperModelContext, DiagnosticList } from "./interfaces";
 
 export interface AIPanelAPI {
     // ==================================
@@ -35,11 +36,11 @@ export interface AIPanelAPI {
     getFromFile: (params: GetFromFileRequest) => Promise<string>;
     getFileExists: (params: GetFromFileRequest) => Promise<boolean>;
     deleteFromProject: (params: DeleteFromProjectRequest) => void;
-    notifyAIMappings: (params: NotifyAIMappingsRequest) => Promise<boolean>;
-    stopAIMappings: () => Promise<GenerateMappingsResponse>;
     getShadowDiagnostics: (params: ProjectSource) => Promise<ProjectDiagnostics>;
     checkSyntaxError: (params: ProjectSource) => Promise<boolean>;
     clearInitialPrompt: () => void;
+    getAllImports: () => Promise<ProjectImports>; 
+    // Data-mapper related functions
     openAIMappingChatWindow: (params: DataMapperModelResponse) => void;
     generateDataMapperModel: (params: DatamapperModelContext) => Promise<DataMapperModelResponse>;
     getTypesFromRecord: (params: GenerateTypesFromRecordRequest) => Promise<GenerateTypesFromRecordResponse>;
@@ -47,6 +48,12 @@ export interface AIPanelAPI {
     generateMappings: (params: MetadataWithAttachments) => Promise<AllDataMapperSourceRequest>;
     addCodeSegmentToWorkspace: (params: CodeSegment) => Promise<boolean>;
     addInlineCodeSegmentToWorkspace: (params: CodeSegment) => void;
+    repairAndCheckDiagnostics: (params: TempDirectoryPath) => Promise<DiagnosticList>;
+    createTempBallerinaDir: () => Promise<string>;
+    repairCodeWithLLM: (params: repairCodeRequest) => Promise<ProjectSource>;
+    extractMappingDetails: (params: ExtractMappingDetailsRequest) => Promise<ExtractMappingDetailsResponse>;
+    getFunctionDefinitionFromSyntaxTree: (params: FunctionDefinitionFromSyntaxTree) => Promise<FunctionDefinition>;
+    repairCodeAndGetUpdatedContent: (params: RepairCodeParams) => Promise<RepairedFilesContent>;
     // Test-generator related functions
     getGeneratedTests: (params: TestGenerationRequest) => Promise<TestGenerationResponse>;
     getTestDiagnostics: (params: TestGenerationResponse) => Promise<ProjectDiagnostics>;

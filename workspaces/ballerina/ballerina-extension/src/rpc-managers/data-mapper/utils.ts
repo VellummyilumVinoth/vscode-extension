@@ -590,7 +590,7 @@ function processTypeKind(
 /**
  * Processes an IORoot (input or output) into an IOType
  */
-function processIORoot(root: IORoot, model: DMModel): IOType {
+export function processIORoot(root: IORoot, model: DMModel): IOType {
     const ioType = createBaseIOType(root);
 
     const typeSpecificProps = processTypeKind(root, root.name, model, new Set<string>());
@@ -794,3 +794,4 @@ function processEnum(
         ...(member.optional !== undefined && { optional: member.optional })
     }));
 }
+

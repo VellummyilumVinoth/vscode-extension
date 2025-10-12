@@ -26,6 +26,7 @@ import { useDMSearchStore } from "../../../store/store";
 import { InputNode } from "../Node";
 import { getErrorKind } from "../utils/common-utils";
 import { OverlayLayerModel } from "../OverlayLayer/OverlayLayerModel";
+import { IOType } from "@wso2/ballerina-core/lib/interfaces/data-mapper";
 
 export const useDiagramModel = (
     nodes: DataMapperNodeModel[],
@@ -44,7 +45,7 @@ export const useDiagramModel = (
     const context = nodes.find(node => node.context)?.context;
     const { model } = context ?? {};
     const mappings = model.mappings.map(mapping => mapping.expression).toString();
-    const subMappings = model?.subMappings?.map(mapping => mapping.id).toString();
+    const subMappings = model?.subMappings?.map(mapping => (mapping as IOType).id).toString();
     const collapsedFields = useDMCollapsedFieldsStore(state => state.fields); // Subscribe to collapsedFields
     const expandedFields = useDMExpandedFieldsStore(state => state.fields); // Subscribe to expandedFields
     const { inputSearch, outputSearch } = useDMSearchStore();

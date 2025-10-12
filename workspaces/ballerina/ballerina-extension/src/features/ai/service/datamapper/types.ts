@@ -14,79 +14,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { IOType } from "@wso2/ballerina-core";
+import { IOType, Mapping, SourceFile } from "@wso2/ballerina-core";
 
 // =============================================================================
-// OPERATION TYPES
+// DATA MAPPING REQUEST/RESPONSE
 // =============================================================================
 
-export type OperationType = string;
-
-// =============================================================================
-// MAPPING TYPES
-// =============================================================================
-
-export interface MappingRecord {
-    operation: OperationType;
-    targetType: string;
-    parameters: string[];
-}
-
-export type MappingJson = MappingRecord | { [key: string]: MappingJson };
-
-export interface DatamapperResponse {
-    mappings: { [key: string]: MappingJson };
-}
-
-export interface Payload {
-    inputs: { [key: string]: RecordField };
-    output: { [key: string]: RecordField };
-    inputMetadata: { [key: string]: Metadata };
-    outputMetadata: { [key: string]: MetadataField };
-    mapping_fields?: { [key: string]: MappingFields };
-}
-
-// =============================================================================
-// FIELD AND METADATA TYPES
-// =============================================================================
-
-export interface SimpleField {
-    type: string;
-    comment: string;
-}
-
-export interface MappingOperation {
-    NAME: OperationType;
-    PARAMETER_1: string;
-    PARAMETER_2?: string;
-    PARAMETER_3?: string;
-    PARAMETER_4?: string;
-}
-
-export type RecordField = SimpleField | { [key: string]: RecordField };
-
-export interface Mapping {
-    OPERATION: MappingOperation;
-}
-
-export type AIDataMappings = (Mapping) | { [key: string]: AIDataMappings };
-
-export interface Metadata {
-    parameterName: string;
-    parameterType: string;
-    type: string;
-    isArrayType?: boolean;
-    fields: { [key: string]: MetadataField };
-}
-
-export interface MetadataField {
-    type: string;
-    typeInstance: string;
-    typeName: string;
-    nullable: boolean;
-    optional: boolean;
-    fields?: { [key: string]: MetadataField };
-    members?: { [key: string]: MetadataField };
+export interface DataMappingRequest {
+    input: IOType[];
+    output: IOType;
 }
 
 export interface DataMappingResponse {
@@ -95,13 +31,24 @@ export interface DataMappingResponse {
     expression: string;
 }
 
-export interface DataMappingRequest {
-    input: IOType[];
-    output: IOType;
+// =============================================================================
+// DATAMAPPER CODE GENERATION
+// =============================================================================
+
+export interface DatamapperResponse {
+    mappings: Mapping[];
 }
 
 // =============================================================================
-// MAPPING HINT TYPES
+// DATAMAPPER CODE REPAIR
+// =============================================================================
+
+export interface RepairedFiles {
+    repairedFiles: SourceFile[];
+}
+
+// =============================================================================
+// MAPPING HINTS
 // =============================================================================
 
 export interface MappingField {
@@ -111,41 +58,8 @@ export interface MappingField {
 
 export type MappingFields = MappingField | { [key: string]: MappingFields };
 
-export type MetadataType = Metadata | MetadataField | { [key: string]: MetadataField };
-
 // =============================================================================
-// OPERATION METADATA STRUCTURES
-// =============================================================================
-
-export interface FieldMetadata {
-    type: string;
-    optional: boolean;
-    nullable: boolean;
-}
-
-export interface ParameterMetadata extends FieldMetadata {
-    input: string;
-}
-
-export interface Structure {
-    operation: string;
-    outputType: string[];
-    inputType: string[];
-    imports: {
-        org?: string;
-        package?: string;
-    };
-    errorReturned: boolean;
-    expression: string;
-}
-
-export interface Operation {
-    readonly name: string;
-    structure: Structure;
-}
-
-// =============================================================================
-// API RESPONSE TYPES
+// CHAT API
 // =============================================================================
 
 export interface ChatMessage {
@@ -166,17 +80,4 @@ export interface ChatResponse {
         completion_tokens: number;
         total_tokens: number;
     };
-}
-
-// =============================================================================
-// VISITOR PATTERN TYPES
-// =============================================================================
-
-export interface VisitorContext {
-    targetPath: string;
-    found: IOType | null;
-}
-
-export interface IOTypeVisitor {
-    visitIOType(ioType: IOType, context: VisitorContext): IOType | null;
 }

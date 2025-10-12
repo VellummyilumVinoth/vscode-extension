@@ -316,19 +316,8 @@ export class DataMapperRpcManager implements DataMapperAPI {
 
     async getExpandedDMFromDMModel(params: DMModelRequest): Promise<ExpandedDMModelResponse> {
         try {
-            const { model, rootViewId, options = {} } = params;
-
-            // Validate input parameters
-            if (!model) {
-                throw new Error("DMModel is required for transformation");
-            }
-
-            if (!rootViewId) {
-                throw new Error("rootViewId is required for transformation");
-            }
-
             // Transform the model using the existing expansion logic
-            const expandedModel = expandDMModel(model, rootViewId);
+            const expandedModel = expandDMModel(params.model, params.rootViewId);
 
             return {
                 expandedModel,

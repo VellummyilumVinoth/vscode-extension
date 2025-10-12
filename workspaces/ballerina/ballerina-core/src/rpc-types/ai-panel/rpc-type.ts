@@ -17,9 +17,10 @@
  * 
  * THIS FILE INCLUDES AUTO GENERATED CODE
  */
-import { AllDataMapperSourceRequest, CreateTempFileRequest, DatamapperModelContext, DataMapperModelResponse, ExtendedDataMapperMetadata, MetadataWithAttachments } from "../../interfaces/extended-lang-client";
+import { FunctionDefinition } from "@wso2/syntax-tree";
+import { AllDataMapperSourceRequest, DataMapperModelResponse, ExtendedDataMapperMetadata } from "../../interfaces/extended-lang-client";
 import { LoginMethod } from "../../state-machine-types";
-import { AddToProjectRequest, GetFromFileRequest, DeleteFromProjectRequest, GenerateMappingsResponse, NotifyAIMappingsRequest, ProjectSource, ProjectDiagnostics, PostProcessRequest, PostProcessResponse, GenerateTypesFromRecordRequest, GenerateTypesFromRecordResponse, FetchDataRequest, FetchDataResponse, TestGenerationRequest, TestGenerationResponse, TestGenerationMentions, AIChatSummary, DeveloperDocument, RequirementSpecification, LLMDiagnostics, GetModuleDirParams, AIPanelPrompt, AIMachineSnapshot, SubmitFeedbackRequest, RelevantLibrariesAndFunctionsRequest, GenerateOpenAPIRequest, GenerateCodeRequest, TestPlanGenerationRequest, TestGeneratorIntermediaryState, RepairParams, RelevantLibrariesAndFunctionsResponse, CodeSegment, DocGenerationRequest, AddFilesToProjectRequest } from "./interfaces";
+import { AddToProjectRequest, GetFromFileRequest, DeleteFromProjectRequest, ProjectSource, ProjectDiagnostics, PostProcessRequest, PostProcessResponse, GenerateTypesFromRecordRequest, GenerateTypesFromRecordResponse, FetchDataRequest, FetchDataResponse, TestGenerationRequest, TestGenerationResponse, TestGenerationMentions, AIChatSummary, DeveloperDocument, RequirementSpecification, LLMDiagnostics, GetModuleDirParams, AIPanelPrompt, AIMachineSnapshot, SubmitFeedbackRequest, RelevantLibrariesAndFunctionsRequest, GenerateOpenAPIRequest, GenerateCodeRequest, TestPlanGenerationRequest, TestGeneratorIntermediaryState, RepairParams, RelevantLibrariesAndFunctionsResponse, CodeSegment, DocGenerationRequest, AddFilesToProjectRequest, TempDirectoryPath, repairCodeRequest, ExtractMappingDetailsRequest, ExtractMappingDetailsResponse, FunctionDefinitionFromSyntaxTree, RepairCodeParams, RepairedFilesContent, ProjectImports, DatamapperModelContext, CreateTempFileRequest, MetadataWithAttachments, DiagnosticList } from "./interfaces";
 import { RequestType, NotificationType } from "vscode-messenger-common";
 
 const _preFix = "ai-panel";
@@ -35,11 +36,10 @@ export const addToProject: RequestType<AddToProjectRequest, boolean> = { method:
 export const getFromFile: RequestType<GetFromFileRequest, string> = { method: `${_preFix}/getFromFile` };
 export const getFileExists: RequestType<GetFromFileRequest, boolean> = { method: `${_preFix}/getFileExists` };
 export const deleteFromProject: NotificationType<DeleteFromProjectRequest> = { method: `${_preFix}/deleteFromProject` };
-export const notifyAIMappings: RequestType<NotifyAIMappingsRequest, boolean> = { method: `${_preFix}/notifyAIMappings` };
-export const stopAIMappings: RequestType<void, GenerateMappingsResponse> = { method: `${_preFix}/stopAIMappings` };
 export const getShadowDiagnostics: RequestType<ProjectSource, ProjectDiagnostics> = { method: `${_preFix}/getShadowDiagnostics` };
 export const checkSyntaxError: RequestType<ProjectSource, boolean> = { method: `${_preFix}/checkSyntaxError` };
 export const clearInitialPrompt: NotificationType<void> = { method: `${_preFix}/clearInitialPrompt` };
+export const getAllImports: RequestType<void, ProjectImports> = { method: `${_preFix}/getAllImports` };
 export const openAIMappingChatWindow: NotificationType<DataMapperModelResponse> = { method: `${_preFix}/openAIMappingChatWindow` };
 export const generateDataMapperModel: RequestType<DatamapperModelContext, DataMapperModelResponse> = { method: `${_preFix}/generateDataMapperModel` };
 export const getTypesFromRecord: RequestType<GenerateTypesFromRecordRequest, GenerateTypesFromRecordResponse> = { method: `${_preFix}/getTypesFromRecord` };
@@ -47,6 +47,12 @@ export const createTempFileAndGenerateMetadata: RequestType<CreateTempFileReques
 export const generateMappings: RequestType<MetadataWithAttachments, AllDataMapperSourceRequest> = { method: `${_preFix}/generateMappings` };
 export const addCodeSegmentToWorkspace: RequestType<CodeSegment, boolean> = { method: `${_preFix}/addCodeSegmentToWorkspace` };
 export const addInlineCodeSegmentToWorkspace: NotificationType<CodeSegment> = { method: `${_preFix}/addInlineCodeSegmentToWorkspace` };
+export const repairAndCheckDiagnostics: RequestType<TempDirectoryPath, DiagnosticList> = { method: `${_preFix}/repairAndCheckDiagnostics` };
+export const createTempBallerinaDir: RequestType<void, string> = { method: `${_preFix}/createTempBallerinaDir` };
+export const repairCodeWithLLM: RequestType<repairCodeRequest, ProjectSource> = { method: `${_preFix}/repairCodeWithLLM` };
+export const extractMappingDetails: RequestType<ExtractMappingDetailsRequest, ExtractMappingDetailsResponse> = { method: `${_preFix}/extractMappingDetails` };
+export const getFunctionDefinitionFromSyntaxTree: RequestType<FunctionDefinitionFromSyntaxTree, FunctionDefinition> = { method: `${_preFix}/getFunctionDefinitionFromSyntaxTree` };
+export const repairCodeAndGetUpdatedContent: RequestType<RepairCodeParams, RepairedFilesContent> = { method: `${_preFix}/repairCodeAndGetUpdatedContent` };
 export const getGeneratedTests: RequestType<TestGenerationRequest, TestGenerationResponse> = { method: `${_preFix}/getGeneratedTests` };
 export const getTestDiagnostics: RequestType<TestGenerationResponse, ProjectDiagnostics> = { method: `${_preFix}/getTestDiagnostics` };
 export const getServiceSourceForName: RequestType<string, string> = { method: `${_preFix}/getServiceSourceForName` };

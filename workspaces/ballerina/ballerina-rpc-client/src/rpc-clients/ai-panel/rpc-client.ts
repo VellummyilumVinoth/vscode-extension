@@ -31,12 +31,15 @@ import {
     DatamapperModelContext,
     DeleteFromProjectRequest,
     DeveloperDocument,
+    DiagnosticList,
     DocGenerationRequest,
     ExtendedDataMapperMetadata,
+    ExtractMappingDetailsRequest,
+    ExtractMappingDetailsResponse,
     FetchDataRequest,
     FetchDataResponse,
+    FunctionDefinitionFromSyntaxTree,
     GenerateCodeRequest,
-    GenerateMappingsResponse,
     GenerateOpenAPIRequest,
     GenerateTypesFromRecordRequest,
     GenerateTypesFromRecordResponse,
@@ -45,16 +48,19 @@ import {
     LLMDiagnostics,
     LoginMethod,
     MetadataWithAttachments,
-    NotifyAIMappingsRequest,
     PostProcessRequest,
     PostProcessResponse,
     ProjectDiagnostics,
+    ProjectImports,
     ProjectSource,
     RelevantLibrariesAndFunctionsRequest,
     RelevantLibrariesAndFunctionsResponse,
+    RepairCodeParams,
     RepairParams,
+    RepairedFilesContent,
     RequirementSpecification,
     SubmitFeedbackRequest,
+    TempDirectoryPath,
     TestGenerationMentions,
     TestGenerationRequest,
     TestGenerationResponse,
@@ -70,9 +76,11 @@ import {
     applyDoOnFailBlocks,
     checkSyntaxError,
     clearInitialPrompt,
+    createTempBallerinaDir,
     createTempFileAndGenerateMetadata,
     createTestDirecoryIfNotExists,
     deleteFromProject,
+    extractMappingDetails,
     fetchData,
     generateCode,
     generateDataMapperModel,
@@ -84,6 +92,7 @@ import {
     getAIMachineSnapshot,
     getAccessToken,
     getActiveFile,
+    getAllImports,
     getBackendUrl,
     getContentFromFile,
     getDefaultPrompt,
@@ -91,6 +100,7 @@ import {
     getFileExists,
     getFromDocumentation,
     getFromFile,
+    getFunctionDefinitionFromSyntaxTree,
     getGeneratedDocumentation,
     getGeneratedTests,
     getLoginMethod,
@@ -110,19 +120,22 @@ import {
     isNaturalProgrammingDirectoryExists,
     isRequirementsSpecificationFileExist,
     markAlertShown,
-    notifyAIMappings,
     openAIMappingChatWindow,
     postProcess,
     promptGithubAuthorize,
     promptWSO2AILogout,
     readDeveloperMdFile,
+    repairAndCheckDiagnostics,
+    repairCodeAndGetUpdatedContent,
+    repairCodeRequest,
+    repairCodeWithLLM,
     repairGeneratedCode,
     showSignInAlert,
-    stopAIMappings,
     submitFeedback,
     updateDevelopmentDocument,
     updateRequirementSpecification
 } from "@wso2/ballerina-core";
+import { FunctionDefinition } from "@wso2/syntax-tree";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
 
@@ -181,14 +194,6 @@ export class AiPanelRpcClient implements AIPanelAPI {
         return this._messenger.sendNotification(deleteFromProject, HOST_EXTENSION, params);
     }
 
-    notifyAIMappings(params: NotifyAIMappingsRequest): Promise<boolean> {
-        return this._messenger.sendRequest(notifyAIMappings, HOST_EXTENSION, params);
-    }
-
-    stopAIMappings(): Promise<GenerateMappingsResponse> {
-        return this._messenger.sendRequest(stopAIMappings, HOST_EXTENSION);
-    }
-
     getShadowDiagnostics(params: ProjectSource): Promise<ProjectDiagnostics> {
         return this._messenger.sendRequest(getShadowDiagnostics, HOST_EXTENSION, params);
     }
@@ -199,6 +204,10 @@ export class AiPanelRpcClient implements AIPanelAPI {
 
     clearInitialPrompt(): void {
         return this._messenger.sendNotification(clearInitialPrompt, HOST_EXTENSION);
+    }
+
+    getAllImports(): Promise<ProjectImports> {
+        return this._messenger.sendRequest(getAllImports, HOST_EXTENSION);
     }
 
     openAIMappingChatWindow(params: DataMapperModelResponse): void {
@@ -227,6 +236,30 @@ export class AiPanelRpcClient implements AIPanelAPI {
 
     addInlineCodeSegmentToWorkspace(params: CodeSegment): void {
         return this._messenger.sendNotification(addInlineCodeSegmentToWorkspace, HOST_EXTENSION, params);
+    }
+
+    repairAndCheckDiagnostics(params: TempDirectoryPath): Promise<DiagnosticList> {
+        return this._messenger.sendRequest(repairAndCheckDiagnostics, HOST_EXTENSION, params);
+    }
+
+    createTempBallerinaDir(): Promise<string> {
+        return this._messenger.sendRequest(createTempBallerinaDir, HOST_EXTENSION);
+    }
+
+    repairCodeWithLLM(params: repairCodeRequest): Promise<ProjectSource> {
+        return this._messenger.sendRequest(repairCodeWithLLM, HOST_EXTENSION, params);
+    }
+
+    extractMappingDetails(params: ExtractMappingDetailsRequest): Promise<ExtractMappingDetailsResponse> {
+        return this._messenger.sendRequest(extractMappingDetails, HOST_EXTENSION, params);
+    }
+
+    getFunctionDefinitionFromSyntaxTree(params: FunctionDefinitionFromSyntaxTree): Promise<FunctionDefinition> {
+        return this._messenger.sendRequest(getFunctionDefinitionFromSyntaxTree, HOST_EXTENSION, params);
+    }
+
+    repairCodeAndGetUpdatedContent(params: RepairCodeParams): Promise<RepairedFilesContent> {
+        return this._messenger.sendRequest(repairCodeAndGetUpdatedContent, HOST_EXTENSION, params);
     }
 
     getGeneratedTests(params: TestGenerationRequest): Promise<TestGenerationResponse> {
