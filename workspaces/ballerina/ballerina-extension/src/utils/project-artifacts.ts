@@ -68,9 +68,10 @@ export async function updateProjectArtifacts(publishedArtifacts: ArtifactsNotifi
     const currentProjectStructure: ProjectStructureResponse = StateMachine.context().projectStructure;
     const projectUri = URI.file(StateMachine.context().projectUri);
     const isWithinProject = URI.parse(publishedArtifacts.uri).fsPath.toLowerCase().includes(projectUri.fsPath.toLowerCase());
+    const notificationHandler = ArtifactNotificationHandler.getInstance();
+
     if (currentProjectStructure && isWithinProject) {
         const entryLocations = await traverseUpdatedComponents(publishedArtifacts.artifacts, currentProjectStructure);
-        const notificationHandler = ArtifactNotificationHandler.getInstance();
         // Publish a notification to the artifact handler
         notificationHandler.publish(ArtifactsUpdated.method, {
             data: entryLocations,
@@ -78,10 +79,11 @@ export async function updateProjectArtifacts(publishedArtifacts: ArtifactsNotifi
         });
         StateMachine.updateProjectStructure({ ...currentProjectStructure }); // Update the project structure and refresh the tree
     } else {
-        const notificationHandler = ArtifactNotificationHandler.getInstance();
-        // Publish a notification to the artifact handler
+        // For temp files outside project, extract entry locations without updating project structure
+        const entryLocations = await extractEntryLocationsFromArtifacts(publishedArtifacts.artifacts);
+        // Publish a notification to the artifact handler with temp file artifacts
         notificationHandler.publish(ArtifactsUpdated.method, {
-            data: [],
+            data: entryLocations,
             timestamp: Date.now()
         });
     }
@@ -366,6 +368,44 @@ async function traverseUpdatedComponents(publishedArtifacts: Artifacts, currentP
     }
 
     // Populate addition entry locations
+    for (const result of results) {
+        if (result) {
+            entryLocations.push(result);
+        }
+    }
+    return entryLocations;
+}
+
+async function extractEntryLocationsFromArtifacts(publishedArtifacts: Artifacts): Promise<ProjectStructureArtifactResponse[]> {
+    const entryLocations: ProjectStructureArtifactResponse[] = [];
+    const promises: Promise<ProjectStructureArtifactResponse | undefined>[] = [];
+
+    for (const [artifactCategoryKey, actionMap] of Object.entries(publishedArtifacts)) {
+        // Process Additions (asynchronous)
+        if (actionMap.additions) {
+            for (const artifact of Object.values(actionMap.additions) as BaseArtifact[]) {
+                const mapping = getDirectoryMapKeyAndIcon(artifact, artifactCategoryKey);
+                if (mapping) {
+                    promises.push(getEntryValue(artifact, mapping.icon));
+                }
+            }
+        }
+
+        // Process Updates (asynchronous)
+        if (actionMap.updates) {
+            for (const artifact of Object.values(actionMap.updates) as BaseArtifact[]) {
+                const mapping = getDirectoryMapKeyAndIcon(artifact, artifactCategoryKey);
+                if (mapping) {
+                    promises.push(getEntryValue(artifact, mapping.icon));
+                }
+            }
+        }
+    }
+
+    // Wait for all additions and updates to complete
+    const results = await Promise.all(promises);
+
+    // Populate entry locations
     for (const result of results) {
         if (result) {
             entryLocations.push(result);
