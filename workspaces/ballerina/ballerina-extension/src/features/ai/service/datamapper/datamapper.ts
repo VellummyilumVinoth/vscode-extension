@@ -24,7 +24,7 @@ import {
 } from "./types";
 import { GeneratedMappingSchema, RepairedSourceFilesSchema } from "./schema";
 import { AIPanelAbortController } from "../../../../../src/rpc-managers/ai-panel/utils";
-import { DataMapperModelResponse, DMModel, Mapping, repairCodeRequest, SourceFile, DiagnosticList, ImportInfo, ProcessMappingParametersRequest, Command, MetadataWithAttachments, InlineMappingsSourceResult, ProcessContextTypeCreationRequest, ProjectImports, ImportStatements, TemplateId, GetModuleDirParams, TextEdit, DataMapperSourceResponse, DataMapperSourceRequest, AllDataMapperSourceRequest } from "@wso2/ballerina-core";
+import { DataMapperModelResponse, DMModel, Mapping, repairCodeRequest, SourceFile, DiagnosticList, ImportInfo, ProcessMappingParametersRequest, Command, MetadataWithAttachments, InlineMappingsSourceResult, ProcessContextTypeCreationRequest, ProjectImports, ImportStatements, TemplateId, GetModuleDirParams, TextEdit, DataMapperSourceResponse, DataMapperSourceRequest, AllDataMapperSourceRequest, SyntaxTree, LinePosition, DataMapperModelRequest } from "@wso2/ballerina-core";
 import { getDataMappingPrompt } from "./dataMappingPrompt";
 import { getBallerinaCodeRepairPrompt } from "./codeRepairPrompt";
 import { CopilotEventHandler, createWebviewEventHandler } from "../event";
@@ -38,6 +38,8 @@ import { commands, Uri, window } from "vscode";
 import { CLOSE_AI_PANEL_COMMAND, OPEN_AI_PANEL_COMMAND } from "../../constants";
 import path from "path";
 import { URI } from "vscode-uri";
+import { STKindChecker, STNode } from "@wso2/syntax-tree";
+import { checkProjectDiagnostics, attemptRepairProject } from "../../../../../src/rpc-managers/ai-panel/repair-utils";
 
 // =============================================================================
 // ENHANCED MAIN ORCHESTRATOR FUNCTION
@@ -388,6 +390,178 @@ export async function generateMappingCodeCore(mappingRequest: ProcessMappingPara
         }, langClient, projectRoot);
     }
 
+    const funcDefinitionNode = await getFunctionDefinitionFromSyntaxTree(
+        langClient,
+        mainFilePath,
+        targetFunctionName
+    );
+
+    const updatedDataMapperMetadata = {
+        filePath: mainFilePath,
+        codedata: {
+            lineRange: {
+                fileName: mainFilePath,
+                startLine: {
+                    line: funcDefinitionNode.position.startLine,
+                    offset: funcDefinitionNode.position.startColumn,
+                },
+                endLine: {
+                    line: funcDefinitionNode.position.endLine,
+                    offset: funcDefinitionNode.position.endColumn,
+                },
+            },
+        },
+        targetField: targetFunctionName,
+        position: {
+            line: funcDefinitionNode.position.startLine,
+            offset: funcDefinitionNode.position.startColumn
+        }
+    };
+
+    // Get updated DM model with the repaired code and updated position
+    const updatedDataMapperModel = await langClient.getDataMapperMappings(updatedDataMapperMetadata as DataMapperModelRequest) as DataMapperModelResponse;
+
+    // Check for diagnostics in the DM model mappings
+    const dmModel = updatedDataMapperModel.mappingsModel as DMModel;
+    let hasDiagnostics = false;
+
+    if (dmModel && dmModel.mappings) {
+        // Remove mappings with diagnostics
+        const validMappings = dmModel.mappings.filter((mapping: any) => {
+            const hasError = mapping.diagnostics && mapping.diagnostics.length > 0;
+            if (hasError) {
+                hasDiagnostics = true;
+            }
+            return !hasError;
+        });
+
+        if (hasDiagnostics) {
+            console.log("Found mappings with diagnostics, removed invalid mappings");
+            dmModel.mappings = validMappings;
+
+            // Regenerate the file from scratch with filtered mappings
+            const fs = require('fs');
+            const newTempDirectory = await createTempBallerinaDir();
+            const recreatedTempFileMetadata = await createTempFileAndGenerateMetadata({
+                tempDir: newTempDirectory,
+                filePath: mappingContext.filePath,
+                metadata: mappingRequest.metadata,
+                inputs: mappingContext.mappingDetails.inputs,
+                output: mappingContext.mappingDetails.output,
+                functionName: targetFunctionName,
+                inputNames: mappingContext.mappingDetails.inputNames,
+                imports: mappingContext.mappingDetails.imports,
+                hasMatchingFunction: doesFunctionAlreadyExist,
+            }, langClient, context);
+
+            // Get the new function definition to get correct position metadata
+            const recreatedFuncDefinitionNode = await getFunctionDefinitionFromSyntaxTree(
+                langClient,
+                recreatedTempFileMetadata.codeData.lineRange.fileName,
+                targetFunctionName
+            );
+
+            const recreatedMetadata = {
+                filePath: recreatedTempFileMetadata.codeData.lineRange.fileName,
+                codedata: {
+                    lineRange: {
+                        fileName: recreatedTempFileMetadata.codeData.lineRange.fileName,
+                        startLine: {
+                            line: recreatedFuncDefinitionNode.position.startLine,
+                            offset: recreatedFuncDefinitionNode.position.startColumn,
+                        },
+                        endLine: {
+                            line: recreatedFuncDefinitionNode.position.endLine,
+                            offset: recreatedFuncDefinitionNode.position.endColumn,
+                        },
+                    },
+                },
+                targetField: targetFunctionName,
+                position: {
+                    line: recreatedFuncDefinitionNode.position.startLine,
+                    offset: recreatedFuncDefinitionNode.position.startColumn
+                }
+            };
+
+            // Update mainFilePath with the filtered mappings using fresh metadata
+            const updatedMappingsRequest: AllDataMapperSourceRequest = {
+                filePath: recreatedMetadata.filePath,
+                codedata: recreatedMetadata.codedata,
+                varName: allMappingsRequest.varName,
+                targetField: recreatedMetadata.targetField,
+                mappings: validMappings,
+                customFunctionsFilePath: allMappingsRequest.customFunctionsFilePath
+            };
+
+            const updatedSourceCodeResponse = await getAllDataMapperSource(updatedMappingsRequest);
+            await updateSourceCode({ textEdits: updatedSourceCodeResponse.textEdits, skipPayloadCheck: true });
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            // Merge with custom functions if same file
+            if (isSameFile && customContent) {
+                const updatedMainContent = fs.readFileSync(mainFilePath, 'utf8');
+                const mergedContent = `${updatedMainContent}\n\n${customContent}`;
+                fs.writeFileSync(mainFilePath, mergedContent, 'utf8');
+            }
+
+            // Re-run repair with updated content
+            codeRepairResult = await repairCodeAndGetUpdatedContent({
+                tempFileMetadata: recreatedTempFileMetadata,
+                customFunctionsFilePath: isSameFile ? undefined : allMappingsRequest.customFunctionsFilePath,
+                imports: uniqueImportStatements,
+                tempDir: tempDirectory
+            }, langClient, projectRoot);
+
+            if (isSameFile) {
+                codeRepairResult.customFunctionsContent = '';
+            }
+        }
+    }
+
+    // Check project diagnostics for the main file
+    const projectDiagnostics = await checkProjectDiagnostics(langClient, tempDirectory);
+    const mainFileUri = Uri.file(mainFilePath).toString();
+    const mainFileDiagnostics = projectDiagnostics.filter(diag => diag.uri === mainFileUri);
+
+    // If diagnostics exist for mainFilePath, attempt repair recursively
+    if (mainFileDiagnostics.length > 0) {
+        let maxRepairAttempts = 3;
+        let repairAttempt = 0;
+        let currentDiagnostics = mainFileDiagnostics;
+
+        while (currentDiagnostics.length > 0 && repairAttempt < maxRepairAttempts) {
+            console.log(`Repair attempt ${repairAttempt + 1} for main file with ${currentDiagnostics.length} diagnostics`);
+
+            // Attempt to repair the file
+            const repairedProject = await attemptRepairProject(langClient, tempDirectory);
+            const repairedMainFileDiags = repairedProject.filter(diag => diag.uri === mainFileUri);
+
+            // Check if diagnostics were reduced
+            if (repairedMainFileDiags.length >= currentDiagnostics.length) {
+                // No improvement, break the loop
+                console.log("Repair attempt did not reduce diagnostics, stopping repair attempts");
+                break;
+            }
+
+            currentDiagnostics = repairedMainFileDiags;
+            repairAttempt++;
+
+            // If all diagnostics are resolved, break
+            if (currentDiagnostics.length === 0) {
+                console.log("All diagnostics resolved successfully");
+                break;
+            }
+        }
+
+        // If diagnostics still exist after repair attempts, throw an error
+        if (currentDiagnostics.length > 0) {
+            const errorMessages = currentDiagnostics.flatMap(d =>
+                d.diagnostics.map(diag => diag.message)
+            ).join('; ');
+            throw new Error(`Failed to repair syntax errors in generated code: ${errorMessages}`);
+        }
+    }
+
     const generatedFunctionDefinition = await getFunctionDefinitionFromSyntaxTree(
         langClient,
         tempFileMetadata.codeData.lineRange.fileName,
@@ -501,7 +675,6 @@ export async function getAllDataMapperSource(
     return { textEdits: consolidatedTextEdits };
 }
 
-
 // Builds individual source requests from the provided parameters by creating a request for each mapping
 export function buildSourceRequests(allMappingsRequest: AllDataMapperSourceRequest): DataMapperSourceRequest[] {
     return allMappingsRequest.mappings.map(singleMapping => ({
@@ -590,11 +763,300 @@ export function sortTextEdits(textEdits: TextEdit[]): TextEdit[] {
     });
 }
 
-// Combines multiple text edits into a single edit with comma-separated content
+// Parses a field assignment like "course: {courseId: person.courseId}" into field name and value
+interface ParsedField {
+    fieldName: string;
+    fieldValue: string;
+    isNestedObject: boolean;
+}
+
+function parseFieldAssignment(text: string): ParsedField {
+    const trimmedText = text.trim();
+    const colonIndex = trimmedText.indexOf(':');
+
+    if (colonIndex === -1) {
+        return { fieldName: '', fieldValue: trimmedText, isNestedObject: false };
+    }
+
+    const fieldName = trimmedText.substring(0, colonIndex).trim();
+    const fieldValue = trimmedText.substring(colonIndex + 1).trim();
+    const isNestedObject = fieldValue.startsWith('{') && fieldValue.endsWith('}');
+
+    return { fieldName, fieldValue, isNestedObject };
+}
+
+// Extracts the inner content of a nested object (removes outer braces)
+function extractObjectContent(value: string): string {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        return trimmed.substring(1, trimmed.length - 1).trim();
+    }
+    return trimmed;
+}
+
+// Recursively merges nested object fields with the same parent field name
+function mergeNestedObjectFields(edits: TextEdit[]): Map<string, string[]> {
+    const fieldGroups = new Map<string, string[]>();
+
+    edits.forEach(edit => {
+        const parsed = parseFieldAssignment(edit.newText);
+
+        if (!parsed.fieldName) {
+            return;
+        }
+
+        if (!fieldGroups.has(parsed.fieldName)) {
+            fieldGroups.set(parsed.fieldName, []);
+        }
+
+        if (parsed.isNestedObject) {
+            const innerContent = extractObjectContent(parsed.fieldValue);
+            fieldGroups.get(parsed.fieldName)!.push(innerContent);
+        } else {
+            fieldGroups.get(parsed.fieldName)!.push(parsed.fieldValue);
+        }
+    });
+
+    return fieldGroups;
+}
+
+// Recursively merges nested content strings that may contain duplicate field names
+function recursivelyMergeNestedContent(contentStrings: string[]): string {
+    if (contentStrings.length === 1) {
+        return contentStrings[0];
+    }
+
+    // Parse each content string into field assignments
+    const allFields: Array<{ text: string; parsed: ParsedField }> = [];
+
+    contentStrings.forEach(content => {
+        const fields = splitNestedFields(content);
+        fields.forEach(field => {
+            allFields.push({
+                text: field,
+                parsed: parseFieldAssignment(field)
+            });
+        });
+    });
+
+    // Group by field name
+    const grouped = new Map<string, string[]>();
+
+    allFields.forEach(({ text, parsed }) => {
+        if (!parsed.fieldName) {
+            return;
+        }
+
+        if (!grouped.has(parsed.fieldName)) {
+            grouped.set(parsed.fieldName, []);
+        }
+
+        if (parsed.isNestedObject) {
+            const innerContent = extractObjectContent(parsed.fieldValue);
+            grouped.get(parsed.fieldName)!.push(innerContent);
+        } else {
+            grouped.get(parsed.fieldName)!.push(parsed.fieldValue);
+        }
+    });
+
+    // Process each group
+    const mergedFields: string[] = [];
+    grouped.forEach((values, fieldName) => {
+        if (values.length === 1) {
+            const value = values[0];
+            if (value.includes(':') && !value.includes('{')) {
+                // Simple nested field
+                mergedFields.push(`${fieldName}: ${value}`);
+            } else {
+                mergedFields.push(`${fieldName}: ${value}`);
+            }
+        } else {
+            // Multiple values - recursively merge them
+            const recursivelyMerged = recursivelyMergeNestedContent(values);
+            mergedFields.push(`${fieldName}: ${recursivelyMerged}`);
+        }
+    });
+
+    return mergedFields.join(', ');
+}
+
+// Recursively formats nested fields with proper indentation and newlines
+function formatNestedContent(values: string[], baseIndent: string = '    ', depth: number = 0): string {
+    // First, recursively merge any duplicate nested fields
+    const mergedContent = recursivelyMergeNestedContent(values);
+
+    // Split the merged content into individual fields
+    const fields = splitNestedFields(mergedContent);
+
+    if (fields.length === 1 && !mergedContent.includes(',')) {
+        const value = fields[0];
+        // If it's a simple value without nesting, return as-is
+        if (!value.includes(':')) {
+            return value;
+        }
+        // Check if this single value has nested objects
+        if (value.includes('{') && value.includes('}')) {
+            return formatSingleNestedValue(value, baseIndent, depth);
+        }
+        return value;
+    }
+
+    // Multiple fields - format each on a new line with indentation
+    const formattedValues = fields.map((field) => {
+        const parsed = parseFieldAssignment(field);
+
+        if (parsed.isNestedObject) {
+            const innerContent = extractObjectContent(parsed.fieldValue);
+            const innerFields = splitNestedFields(innerContent);
+
+            // Check if inner content needs further recursive formatting
+            const needsRecursiveFormat = innerFields.some(f => {
+                const p = parseFieldAssignment(f);
+                return p.isNestedObject;
+            });
+
+            if (needsRecursiveFormat || innerFields.length > 1) {
+                const formattedInner = formatNestedObject(innerFields, baseIndent, depth + 1);
+                return `${baseIndent}${parsed.fieldName}: ${formattedInner}`;
+            } else {
+                return `${baseIndent}${field}`;
+            }
+        } else {
+            return `${baseIndent}${field}`;
+        }
+    });
+
+    return '\n' + formattedValues.join(',\n');
+}
+
+// Formats a nested object with proper braces and indentation
+function formatNestedObject(fields: string[], baseIndent: string, depth: number): string {
+    const currentIndent = baseIndent.repeat(depth);
+    const nextIndent = baseIndent.repeat(depth + 1);
+
+    const formattedFields = fields.map(field => {
+        const parsed = parseFieldAssignment(field);
+
+        if (parsed.isNestedObject) {
+            const innerContent = extractObjectContent(parsed.fieldValue);
+            const innerFields = splitNestedFields(innerContent);
+
+            if (innerFields.length > 1 || innerFields.some(f => parseFieldAssignment(f).isNestedObject)) {
+                const formattedInner = formatNestedObject(innerFields, baseIndent, depth + 1);
+                return `${nextIndent}${parsed.fieldName}: ${formattedInner}`;
+            } else {
+                return `${nextIndent}${parsed.fieldName}: {${innerContent}}`;
+            }
+        } else {
+            return `${nextIndent}${field}`;
+        }
+    });
+
+    return `{\n${formattedFields.join(',\n')}\n${currentIndent}}`;
+}
+
+// Formats a single nested value that may contain further nesting
+function formatSingleNestedValue(value: string, baseIndent: string, depth: number = 0): string {
+    // Parse the value to extract nested structure
+    const colonIndex = value.indexOf(':');
+    if (colonIndex === -1) {
+        return value;
+    }
+
+    const fieldName = value.substring(0, colonIndex).trim();
+    let fieldValue = value.substring(colonIndex + 1).trim();
+
+    // If the value is a nested object, recursively format it
+    if (fieldValue.startsWith('{') && fieldValue.endsWith('}')) {
+        const innerContent = fieldValue.substring(1, fieldValue.length - 1).trim();
+
+        // Check if inner content has multiple comma-separated fields
+        const innerFields = splitNestedFields(innerContent);
+
+        if (innerFields.length > 1) {
+            const formattedInner = innerFields.map((field, index) => {
+                const isLast = index === innerFields.length - 1;
+                return `${baseIndent}${field}`;
+            }).join(',\n');
+
+            return `${fieldName}: {\n${formattedInner}\n}`;
+        } else {
+            return `${fieldName}: {${innerContent}}`;
+        }
+    }
+
+    return value;
+}
+
+// Splits nested fields by comma, respecting nested braces
+function splitNestedFields(content: string): string[] {
+    const fields: string[] = [];
+    let currentField = '';
+    let braceDepth = 0;
+
+    for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+
+        if (char === '{') {
+            braceDepth++;
+            currentField += char;
+        } else if (char === '}') {
+            braceDepth--;
+            currentField += char;
+        } else if (char === ',' && braceDepth === 0) {
+            fields.push(currentField.trim());
+            currentField = '';
+        } else {
+            currentField += char;
+        }
+    }
+
+    if (currentField.trim()) {
+        fields.push(currentField.trim());
+    }
+
+    return fields;
+}
+
+// Recursively processes nested fields to merge objects at all levels with proper formatting
+function processNestedFields(fieldGroups: Map<string, string[]>): string[] {
+    const result: string[] = [];
+
+    fieldGroups.forEach((values, fieldName) => {
+        if (values.length === 1) {
+            // Single value - check if it's already an object or needs wrapping
+            const value = values[0];
+            if (value.includes('{') && value.includes('}')) {
+                const formatted = formatSingleNestedValue(`${fieldName}: {${value}}`, '    ', 0);
+                result.push(formatted);
+            } else if (value.includes(':')) {
+                // It's a nested field assignment, wrap in braces
+                result.push(`${fieldName}: {${value}}`);
+            } else {
+                // Simple value assignment
+                result.push(`${fieldName}: ${value}`);
+            }
+        } else {
+            // Multiple values for the same field - need to merge and format them
+            const mergedContent = formatNestedContent(values, '    ', 0);
+            if (mergedContent.includes('\n')) {
+                result.push(`${fieldName}: {${mergedContent}\n}`);
+            } else {
+                result.push(`${fieldName}: {${mergedContent}}`);
+            }
+        }
+    });
+
+    return result;
+}
+
+// Combines multiple text edits into a single edit with proper nested object merging
 export function combineTextEdits(sortedTextEdits: TextEdit[]): TextEdit {
-    const formattedTextArray = sortedTextEdits.map((singleEdit, editIndex) => {
-        const editContent = singleEdit.newText.trim();
-        return editIndex < sortedTextEdits.length - 1 ? `${editContent},` : editContent;
+    const fieldGroups = mergeNestedObjectFields(sortedTextEdits);
+    const processedFields = processNestedFields(fieldGroups);
+
+    const formattedTextArray = processedFields.map((text, index) => {
+        return index < processedFields.length - 1 ? `${text},` : text;
     });
 
     return {

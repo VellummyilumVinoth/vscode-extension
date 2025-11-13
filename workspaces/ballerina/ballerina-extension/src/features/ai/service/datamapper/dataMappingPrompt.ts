@@ -68,6 +68,7 @@ When generating mapping expressions, follow this strict order of priority:
 - Use exact type names from the schema in all custom function signatures
 
 ### Mapping Strategy
+- **MAP EACH FIELD INDIVIDUALLY** - This is the most important requirement
 - Perform mapping at the field level, not at the record or array level
 - Break down complex structures and map their individual components
 - For arrays of records, analyze individual fields within those records
@@ -97,6 +98,36 @@ When generating mapping expressions, follow this strict order of priority:
 - Do not include default values for fields that have explicit mappings
 - Do not provide default values for optional fields
 
+### CRITICAL REQUIREMENT: Individual Field Mappings
+
+**You MUST create a separate mapping for each individual output field. Never group multiple fields together under a parent path.**
+
+#### Examples of Correct vs Incorrect Mapping:
+
+**INCORRECT** - Grouping multiple fields under parent:
+\`\`\`json
+{
+  "outputField": "student.course",
+  "expression": "{ courseId: person.courseId, courseName: person.courseName }"
+}
+\`\`\`
+
+ **CORRECT** - Separate mappings for each field:
+\`\`\`json
+[
+  {
+    "outputField": "student.course.courseId",
+    "expression": "person.courseId"
+  },
+  {
+    "outputField": "student.course.courseName",
+    "expression": "person.courseName"
+  }
+]
+\`\`\`
+
+**This requirement applies to ALL nested structures, regardless of depth.** Each leaf field in the output model must have its own mapping entry.
+
 ## Output Format
 
 Provide your final answer as a JSON array. Each object in the array must contain exactly these three fields:
@@ -114,7 +145,7 @@ Provide your final answer as a JSON array. Each object in the array must contain
 
 - **\`"functionDefinition"\`**: (include only when the expression requires a function) All custom function implementations needed, including helper functions, ordered by dependency. Provide ONLY executable Ballerina code without comments. If no custom function is needed, omit this field entirely.
 
-**Important Grouping Rule**: When multiple output fields belong to the same nested record structure, create ONE mapping object with the parent path as \`outputField\` and a record constructor expression that maps all the fields together.
+### Example Output Structure:
 
 **Example Output Structure:**
 \`\`\`json
@@ -131,6 +162,14 @@ Provide your final answer as a JSON array. Each object in the array must contain
     "outputField": "transform.customerType",
     "expression": "processCustomerType(input?.customerType)",
     "functionDefinition": "\n\nfunction processCustomerType(module:CustomerTypeEnum? inputType) returns string {\n    if inputType is () {\n        return \"UNKNOWN\";\n    }\n    return inputType;\n}"
+  },
+  {
+    "outputField": "transform.student.course.courseId",
+    "expression": "person.courseId"
+  },
+  {
+    "outputField": "transform.student.course.courseName",
+    "expression": "person.courseName"
   }
 ]
 \`\`\`
