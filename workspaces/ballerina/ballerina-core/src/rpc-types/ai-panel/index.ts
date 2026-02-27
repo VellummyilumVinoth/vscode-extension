@@ -45,6 +45,8 @@ import {
     CheckpointInfo,
     AbortAIGenerationRequest,
     UsageResponse,
+    Attachment,
+    CommandSelector,
 } from "./interfaces";
 
 export interface AIPanelAPI {
@@ -109,4 +111,5 @@ export interface AIPanelAPI {
     updateChatMessage: (params: UpdateChatMessageRequest) => Promise<void>;
     getActiveTempDir: () => Promise<string>;
     getUsage: () => Promise<UsageResponse | undefined>;
+    selectContextFiles: (params: CommandSelector) => Promise<Attachment[]>;
 }

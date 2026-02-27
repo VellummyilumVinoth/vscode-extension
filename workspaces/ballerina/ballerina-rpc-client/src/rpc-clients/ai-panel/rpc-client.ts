@@ -24,7 +24,9 @@ import {
     AbortAIGenerationRequest,
     AddFilesToProjectRequest,
     ApproveTaskRequest,
+    Attachment,
     CheckpointInfo,
+    CommandSelector,
     ConnectorSpecCancelRequest,
     ConnectorSpecRequest,
     ConfigurationCancelRequest,
@@ -94,7 +96,8 @@ import {
     submitFeedback,
     updateChatMessage,
     updateRequirementSpecification,
-    getUsage
+    getUsage,
+    selectContextFiles
 } from "@wso2/ballerina-core";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
@@ -292,5 +295,9 @@ export class AiPanelRpcClient implements AIPanelAPI {
 
     getUsage(): Promise<UsageResponse | undefined> {
         return this._messenger.sendRequest(getUsage, HOST_EXTENSION);
+    }
+
+    selectContextFiles(params: CommandSelector): Promise<Attachment[]> {
+        return this._messenger.sendRequest(selectContextFiles, HOST_EXTENSION, params);
     }
 }

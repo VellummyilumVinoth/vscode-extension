@@ -452,6 +452,10 @@ export type ErrorCode = {
     message: string;
 }
 
+export interface CommandSelector {
+    command: Command | null;
+}
+
 // ==================================
 // Chat State Interfaces (for RPC)
 // ==================================

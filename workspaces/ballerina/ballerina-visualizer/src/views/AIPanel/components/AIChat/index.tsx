@@ -1828,6 +1828,7 @@ const AIChat: React.FC = () => {
                                 multiple: true,
                                 acceptResolver: acceptResolver,
                                 handleAttachmentSelection: handleAttachmentSelection,
+                                selectFiles: (params) => rpcClient.getAiPanelRpcClient().selectContextFiles(params),
                             }}
                             inputPlaceholder="Describe your integration..."
                             onSend={handleSend}

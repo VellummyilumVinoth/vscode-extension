@@ -85,7 +85,9 @@ import {
     updateChatMessage,
     UpdateChatMessageRequest,
     updateRequirementSpecification,
-    getUsage
+    getUsage,
+    selectContextFiles,
+    CommandSelector
 } from "@wso2/ballerina-core";
 import { Messenger } from "vscode-messenger";
 import { AiPanelRpcManager } from "./rpc-manager";
@@ -139,4 +141,5 @@ export function registerAiPanelRpcHandlers(messenger: Messenger) {
     messenger.onRequest(updateChatMessage, (args: UpdateChatMessageRequest) => rpcManger.updateChatMessage(args));
     messenger.onRequest(getActiveTempDir, () => rpcManger.getActiveTempDir());
     messenger.onRequest(getUsage, () => rpcManger.getUsage());
+    messenger.onRequest(selectContextFiles, (args: CommandSelector) => rpcManger.selectContextFiles(args));
 }

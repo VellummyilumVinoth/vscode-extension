@@ -581,14 +581,16 @@ const AIChatInput = forwardRef<AIChatInputRef, AIChatInputProps>(
                                 >
                                     /
                                 </ActionButton>
-                                <input
-                                    type="file"
-                                    multiple={attachmentOptions.multiple}
-                                    accept={attachmentOptions.acceptResolver(activeCommand)}
-                                    style={{ display: "none" }}
-                                    ref={fileInputRef}
-                                    onChange={onAttachmentSelection}
-                                />
+                                {!attachmentOptions.selectFiles && (
+                                    <input
+                                        type="file"
+                                        multiple={attachmentOptions.multiple}
+                                        accept={attachmentOptions.acceptResolver(activeCommand)}
+                                        style={{ display: "none" }}
+                                        ref={fileInputRef}
+                                        onChange={onAttachmentSelection}
+                                    />
+                                )}
                                 <ActionButton title="Attach Context" onClick={handleAttachClick}>
                                     <Codicon name="new-file" />
                                 </ActionButton>

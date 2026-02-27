@@ -23,8 +23,11 @@ import {
     AIPanelPrompt,
     AbortAIGenerationRequest,
     AddFilesToProjectRequest,
+    Attachment,
+    AttachmentStatus,
     CheckpointInfo,
     Command,
+    CommandSelector,
     DocGenerationRequest,
     GenerateAgentCodeRequest,
     GenerateOpenAPIRequest,
@@ -45,8 +48,9 @@ import {
     UsageResponse
 } from "@wso2/ballerina-core";
 import * as fs from 'fs';
+import * as os from 'os';
 import path from "path";
-import { extensions, workspace } from 'vscode';
+import { extensions, Uri, window, workspace } from 'vscode';
 
 import { isNumber } from "lodash";
 import { getServiceDeclarationNames } from "../../../src/features/ai/documentation/utils";
@@ -701,6 +705,46 @@ export class AiPanelRpcManager implements AIPanelAPI {
         const projectPath = pendingReview.reviewState.tempProjectPath;
         console.log(">>> active temp project path", projectPath);
         return projectPath;
+    }
+
+    async selectContextFiles(params: CommandSelector): Promise<Attachment[]> {
+        const projectPath = StateMachine.context().projectPath;
+        const fileFilters = (params.command === Command.DataMap || params.command === Command.TypeCreator)
+            ? { 'Document Files': ['txt', 'csv', 'jpeg', 'jpg', 'png', 'heic', 'heif', 'pdf'] }
+            : { 'Text Files': ['txt', 'csv', 'xml', 'md', 'markdown', 'json', 'yaml', 'yml', 'sql', 'graphql'] };
+        const uris = await window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: true,
+            defaultUri: Uri.file(projectPath ?? os.homedir()),
+            filters: fileFilters,
+            title: "Select Context Files",
+        });
+
+        if (!uris || uris.length === 0) {
+            return [];
+        }
+
+        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+        const attachments: Attachment[] = [];
+
+        for (const uri of uris) {
+            const filePath = uri.fsPath;
+            const fileName = path.basename(filePath);
+            try {
+                const stats = fs.statSync(filePath);
+                if (stats.size > MAX_FILE_SIZE) {
+                    attachments.push({ name: fileName, status: AttachmentStatus.FileSizeExceeded });
+                    continue;
+                }
+                const content = fs.readFileSync(filePath, 'utf8');
+                attachments.push({ name: fileName, content, status: AttachmentStatus.Success });
+            } catch {
+                attachments.push({ name: fileName, status: AttachmentStatus.UnknownError });
+            }
+        }
+
+        return attachments;
     }
 
     async getUsage(): Promise<UsageResponse | undefined> {

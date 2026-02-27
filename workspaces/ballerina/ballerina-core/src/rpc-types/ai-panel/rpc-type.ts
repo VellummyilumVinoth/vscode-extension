@@ -47,6 +47,8 @@ import {
     CheckpointInfo,
     AbortAIGenerationRequest,
     UsageResponse,
+    Attachment,
+    CommandSelector,
 } from "./interfaces";
 import { RequestType, NotificationType } from "vscode-messenger-common";
 
@@ -98,3 +100,4 @@ export const clearChat: RequestType<void, void> = { method: `${_preFix}/clearCha
 export const updateChatMessage: RequestType<UpdateChatMessageRequest, void> = { method: `${_preFix}/updateChatMessage` };
 export const getActiveTempDir: RequestType<void, string> = { method: `${_preFix}/getActiveTempDir` };
 export const getUsage: RequestType<void, UsageResponse | undefined> = { method: `${_preFix}/getUsage` };
+export const selectContextFiles: RequestType<CommandSelector, Attachment[]> = { method: `${_preFix}/selectContextFiles` };
