@@ -950,14 +950,25 @@ User reverted the last made changes. The files have been restored to the state b
         return slash !== -1 ? skillId.slice(slash + 1) : skillId;
     }
 
-    private buildBuiltinSkillEntries(allDisabled: Set<string>): SkillEntry[] {
-        return REGISTERED_SKILLS.map(s => ({
-            id: s.name,
-            name: s.name,
-            trigger: s.trigger,
-            tier: SkillTier.BUILTIN,
-            enabled: !allDisabled.has(s.name),
-        }));
+    private buildBuiltinSkillEntries(allDisabled: Set<string>, allEnabled: Set<string>): SkillEntry[] {
+        return REGISTERED_SKILLS.map(s => {
+            let enabled: boolean;
+            if (s.optional === false) {
+                enabled = true;
+            } else if (s.default === false) {
+                enabled = allEnabled.has(s.name);
+            } else {
+                enabled = !allDisabled.has(s.name);
+            }
+            return {
+                id: s.name,
+                name: s.name,
+                trigger: s.trigger,
+                tier: SkillTier.BUILTIN,
+                enabled,
+                optional: s.optional,
+            };
+        });
     }
 
     private buildProjectSkillEntries(projectRootPath: string, allDisabled: Set<string>): SkillEntry[] {
@@ -992,12 +1003,13 @@ User reverted the last made changes. The files have been restored to the state b
         const projectRootPath = resolveProjectRootPath();
         const globalConfig = getSkillsConfig(GLOBAL_SKILLS_CONFIG_PATH);
         const projectConfigPath = projectRootPath ? buildProjectSkillsConfigPath(projectRootPath) : null;
-        const projectConfig = projectConfigPath ? getSkillsConfig(projectConfigPath) : { disabledSkills: [] };
+        const projectConfig = projectConfigPath ? getSkillsConfig(projectConfigPath) : { disabledSkills: [], enabledSkills: [] };
         const allDisabled = new Set([...globalConfig.disabledSkills, ...projectConfig.disabledSkills]);
+        const allEnabled = new Set([...globalConfig.enabledSkills, ...projectConfig.enabledSkills]);
 
         return {
             skills: [
-                ...this.buildBuiltinSkillEntries(allDisabled),
+                ...this.buildBuiltinSkillEntries(allDisabled, allEnabled),
                 ...(projectRootPath ? this.buildProjectSkillEntries(projectRootPath, allDisabled) : []),
                 ...this.buildUserSkillEntries(allDisabled),
             ],
@@ -1023,7 +1035,10 @@ User reverted the last made changes. The files have been restored to the state b
     async toggleSkill(params: ToggleSkillRequest): Promise<boolean> {
         try {
             const configPath = this.resolveSkillsConfigPath(params.tier, resolveProjectRootPath());
-            setSkillEnabled(configPath, params.skillId, params.enabled);
+            const builtinSkill = params.tier === SkillTier.BUILTIN
+                ? REGISTERED_SKILLS.find(s => s.name === params.skillId)
+                : undefined;
+            setSkillEnabled(configPath, params.skillId, params.enabled, builtinSkill?.default === false);
             return true;
         } catch (error) {
             console.error('[Skills] toggleSkill failed:', error);

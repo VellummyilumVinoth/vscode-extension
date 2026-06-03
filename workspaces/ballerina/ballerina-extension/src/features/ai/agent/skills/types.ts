@@ -18,6 +18,10 @@ export interface Skill {
     name: string;
     trigger: string;
     content: string;
+    /** Whether the user can toggle this skill on/off. False = always active, no toggle shown. */
+    optional?: boolean;
+    /** Default enabled state before any user preference is set. */
+    default?: boolean;
 }
 
 export interface ProjectSkillMeta {

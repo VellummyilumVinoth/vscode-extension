@@ -24,6 +24,14 @@ import { approvalManager } from '../../../state/ApprovalManager';
 
 export const SKILL_TOOL_NAME = "invoke_skill";
 
+function applySkillArguments(content: string, args: string): string {
+    const parts = args.split(/\s+/);
+    return content
+        .replace(/\$ARGUMENTS\[(\d+)\]/g, (_, i) => parts[+i] ?? '')
+        .replace(/\$(\d+)/g, (_, i) => parts[+i] ?? '')
+        .replace(/\$ARGUMENTS/g, args);
+}
+
 export function createSkillTool(
     builtInSkills: Skill[],
     projectRootPath: string,
@@ -42,8 +50,11 @@ Call this tool once per skill whenever a skill's trigger condition is met. Each 
                 "Name of the skill to invoke. Case-insensitive. " +
                 "Plain name for built-in skills and full prefixed name for project or user skills."
             ),
+            args: z.string().optional().describe(
+                "Arguments to substitute for $ARGUMENTS, $ARGUMENTS[N], and $N placeholders in the skill content."
+            ),
         }),
-        execute: async ({ skillName }, context?: { toolCallId?: string }) => {
+        execute: async ({ skillName, args }, context?: { toolCallId?: string }) => {
             const toolCallId = context?.toolCallId ?? `skill-${Date.now()}`;
             eventHandler({
                 type: "tool_call",
@@ -92,7 +103,9 @@ Call this tool once per skill whenever a skill's trigger condition is met. Each 
                     const freshProject = projectRootPath ? readProjectSkillContent(projectRootPath, skillName) : null;
                     const freshUser = readUserSkillContent(skillName);
                     const fresh = freshProject ?? freshUser ?? builtIn;
-                    const result = { found: true, skillName: fresh?.name ?? resolved.name, content: fresh?.content ?? '' };
+                    const rawContent = fresh?.content ?? '';
+                    const content = args ? applySkillArguments(rawContent, args) : rawContent;
+                    const result = { found: true, skillName: fresh?.name ?? resolved.name, content };
                     eventHandler({ type: "tool_result", toolName: SKILL_TOOL_NAME, toolOutput: result, toolCallId } as any);
                     return result;
                 } else {
@@ -102,7 +115,9 @@ Call this tool once per skill whenever a skill's trigger condition is met. Each 
                 }
             }
 
-            const result = { found: true, skillName: resolved.name, content: resolved.content };
+            const rawContent = resolved.content;
+            const content = args ? applySkillArguments(rawContent, args) : rawContent;
+            const result = { found: true, skillName: resolved.name, content };
             eventHandler({ type: "tool_result", toolName: SKILL_TOOL_NAME, toolOutput: result, toolCallId } as any);
             return result;
         },

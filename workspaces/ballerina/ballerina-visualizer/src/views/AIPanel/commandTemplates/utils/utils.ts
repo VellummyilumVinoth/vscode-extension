@@ -28,7 +28,7 @@ export const getAllCommands = (templates: CommandTemplates): Command[] => {
 }
 
 export const getPublicCommands = (templates: CommandTemplates): Command[] => {
-    return Object.keys(templates).filter((cmd) => cmd !== Command.Agent) as Command[];
+    return Object.keys(templates).filter((cmd) => cmd !== Command.Agent && cmd !== Command.DataMap) as Command[];
 }
 
 export const getCommand = (input: string): Command | undefined => {

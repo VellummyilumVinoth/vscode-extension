@@ -56,8 +56,7 @@ const COMMAND_META: Record<string, { icon: string; description: string }> = {
     "/doc":                                { icon: "codicon-book",               description: "Generate documentation" },
     "/openapi":                            { icon: "codicon-file-code",          description: "Import OpenAPI specifications" },
     "/typecreator":                        { icon: "codicon-symbol-class",       description: "Create custom types" },
-    "/datamap":                            { icon: "codicon-arrow-swap",         description: "Generate data mappings" },
-    "/natural-programming (experimental)": { icon: "codicon-sparkle",            description: "Experimental NL-to-code" },
+"/natural-programming (experimental)": { icon: "codicon-sparkle",            description: "Experimental NL-to-code" },
 };
 
 interface BaseSuggestion {

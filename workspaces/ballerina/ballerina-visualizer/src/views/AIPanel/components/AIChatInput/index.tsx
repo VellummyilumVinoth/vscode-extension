@@ -298,6 +298,17 @@ const AIChatInput = forwardRef<AIChatInputRef, AIChatInputProps>(
                         case "text":
                             inputRef.current?.insertTextAtCursor({ text: updatedContent.text });
                             break;
+                        case "skill":
+                            inputRef.current?.insertBadgeAtCursor({
+                                displayText: `/${updatedContent.skillName}`,
+                                rawValue: updatedContent.skillId,
+                                badgeType: ChatBadgeType.Skill,
+                                suffixText: " ",
+                            });
+                            if (updatedContent.args) {
+                                inputRef.current?.insertTextAtCursor({ text: updatedContent.args });
+                            }
+                            break;
                         default:
                             break;
                     }
@@ -529,6 +540,7 @@ const AIChatInput = forwardRef<AIChatInputRef, AIChatInputProps>(
             }
         };
 
+
         /**
          * Clears the chat input and attachments after sending
          */
@@ -546,11 +558,18 @@ const AIChatInput = forwardRef<AIChatInputRef, AIChatInputProps>(
             const filteredAttachments = attachments.filter(
                 (attachment) => attachment.status === AttachmentStatus.Success
             );
-            const skillBadge = input?.find(
-                (i): i is SkillBadgeInput => 'badgeType' in i && (i as any).badgeType === ChatBadgeType.Skill
-            );
+            const skillBadgeIndex = input?.findIndex(
+                (i): i is SkillBadgeInput => 'badgeType' in i && (i as SkillBadgeInput).badgeType === ChatBadgeType.Skill
+            ) ?? -1;
+            const skillBadge = skillBadgeIndex >= 0 ? input?.[skillBadgeIndex] as SkillBadgeInput : undefined;
+            const selectedSkillArgs = skillBadgeIndex >= 0
+                ? (input?.slice(skillBadgeIndex + 1) ?? [])
+                    .filter((i): i is { content: string } => 'content' in i)
+                    .map(i => i.content).join('').trim() || undefined
+                : undefined;
             const metadata = skillBadge
-                ? { ...currentMetadata, selectedSkillId: skillBadge.skillId, selectedSkillName: skillBadge.display.replace(/^\//, '') }
+                ? { ...currentMetadata, selectedSkillId: skillBadge.skillId, selectedSkillName: skillBadge.display.replace(/^\//, ''),
+                    ...(selectedSkillArgs && { selectedSkillArgs }) }
                 : currentMetadata;
             onSend({ input: input, attachments: filteredAttachments, metadata: metadata });
             cleanChatInput();

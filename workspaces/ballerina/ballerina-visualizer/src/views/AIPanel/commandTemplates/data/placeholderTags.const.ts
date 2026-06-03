@@ -40,17 +40,7 @@ export const placeholderTags: PlaceholderTagMap = {
     //         methodPath: [],
     //     },
     // },
-    [Command.DataMap]: {
-        'mappings-for-records': {
-            inputRecords: [],
-            outputRecord: [],
-            functionName: [],
-        },
-        'mappings-for-function': {
-            functionName: [],
-        },
-        'inline-mappings': {}
-    },
+    [Command.DataMap]: {},
     [Command.TypeCreator]: {
         'types-for-attached': {}
     },

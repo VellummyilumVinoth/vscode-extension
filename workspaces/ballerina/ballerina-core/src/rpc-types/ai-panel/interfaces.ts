@@ -29,6 +29,7 @@ import { ComponentInfo, DataMapperMetadata, Diagnostics, DMModel, ImportStatemen
 export type AIPanelPrompt =
     | { type: 'command-template'; command: Command; templateId: TemplateId; text?: string; params?: Record<string, string>; metadata?: Record<string, any>; hiddenContext?: string }
     | { type: 'text'; text: string; planMode: boolean; codeContext?: CodeContext; autoSubmit?: boolean; hiddenContext?: string; suggestedCommandTemplates?: AIPanelPrompt[];    inputPlaceholder?:string; }
+    | { type: 'skill'; skillId: string; skillName: string; args?: string; autoSubmit?: boolean; hiddenContext?: string }
     | undefined;
 
 export interface AIMachineSnapshot {
@@ -574,6 +575,8 @@ export interface SkillEntry {
     body?: string;
     tier: SkillTier;
     enabled: boolean;
+    /** False = always active, no toggle shown in UI. Undefined/true = user can toggle. */
+    optional?: boolean;
 }
 
 export interface DeleteSkillRequest {

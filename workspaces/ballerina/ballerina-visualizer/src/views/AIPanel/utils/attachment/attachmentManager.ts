@@ -58,7 +58,6 @@ const DOCUMENT_TYPES = [
  */
 export const getFileTypesForCommand = (command: Command | null): string[] => {
     switch (command) {
-        case Command.DataMap:
         case Command.TypeCreator:
             return DOCUMENT_TYPES;
         default:
@@ -88,7 +87,6 @@ export const handleAttachmentSelection = async (
     let attachmentHandler;
 
     switch (command) {
-        case Command.DataMap:
         case Command.TypeCreator:
             attachmentHandler = new DataMapperAttachment(command);
             break;

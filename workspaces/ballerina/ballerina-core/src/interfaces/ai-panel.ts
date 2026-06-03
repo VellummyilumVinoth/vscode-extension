@@ -18,7 +18,7 @@
 
 export enum Command {
     // Tests = '/tests',
-    DataMap = '/datamap',
+    DataMap = '/datamap', // Internal use only - invoked from diagram, not chat UI
     TypeCreator = '/typecreator',
     // Healthcare = '/healthcare',
     Ask = '/ask',
@@ -36,11 +36,6 @@ export enum TemplateId {
     // Command.Tests
     TestsForService = 'tests-for-service',
     TestsForFunction = 'tests-for-function',
-
-    // Command.DataMap
-    MappingsForRecords = 'mappings-for-records',
-    MappingsForFunction = 'mappings-for-function',
-    InlineMappings = 'inline-mappings',
 
     // Command.TypeCreator
     TypesForAttached = 'types-for-attached',

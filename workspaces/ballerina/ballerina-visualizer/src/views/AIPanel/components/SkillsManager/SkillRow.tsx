@@ -139,7 +139,7 @@ const SkillRow: React.FC<SkillRowProps> = ({ skill, onToggle, onEdit, onDelete }
             <BuiltinRow>
                 <CardHeader>
                     <CardName title={skill.name}>{shortName}</CardName>
-                    {onToggle && (
+                    {onToggle && skill.optional !== false && (
                         <ToggleTrack
                             type="button"
                             enabled={enabled}
@@ -159,7 +159,7 @@ const SkillRow: React.FC<SkillRowProps> = ({ skill, onToggle, onEdit, onDelete }
         <Card>
             <CardHeader>
                 <CardName title={skill.name}>{shortName}</CardName>
-                {onToggle && (
+                {onToggle && skill.optional !== false && (
                     <ToggleTrack
                         type="button"
                         enabled={enabled}

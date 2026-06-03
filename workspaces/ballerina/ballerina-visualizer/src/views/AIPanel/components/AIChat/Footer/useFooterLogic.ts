@@ -72,30 +72,6 @@ export const useFooterLogic = ({
         //     }))
         // );
 
-        // === Command.DataMap ===
-        const recordNames = (await rpcClient.getBIDiagramRpcClient().getRecordNames()).mentions;
-        const recordTags: Tag[] = recordNames.map((recordName) => ({
-            display: `@${recordName}`,
-            value: recordName,
-            injected: true,
-            kind: "placeholder-specific",
-        }));
-        injectTags(Command.DataMap, "mappings-for-records", "inputRecords", recordTags);
-        injectTags(Command.DataMap, "mappings-for-records", "outputRecord", recordTags);
-
-        const functionNames = (await rpcClient.getBIDiagramRpcClient().getFunctionNames()).mentions;
-        injectTags(
-            Command.DataMap,
-            "mappings-for-function",
-            "functionName",
-            functionNames.map((functionName) => ({
-                display: `@${functionName}`,
-                value: functionName,
-                injected: true,
-                kind: "placeholder-specific",
-            }))
-        );
-
         // === Command.Doc ===
         injectTags(
             Command.Doc,

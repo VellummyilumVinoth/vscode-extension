@@ -25,7 +25,7 @@ import {
     DMModelDiagnosticsResult,
 } from "./types";
 import { GeneratedMappingSchema, RepairedMappingsSchema } from "./schema";
-import { DataMapperModelResponse, DMModel, Mapping, repairCodeRequest, SourceFile, ImportInfo, ProcessMappingParametersRequest, Command, MetadataWithAttachments, InlineMappingsSourceResult, ProcessContextTypeCreationRequest, ProjectImports, ImportStatements, TemplateId, GetModuleDirParams, TextEdit, DataMapperSourceRequest, AllDataMapperSourceRequest, DataMapperModelRequest, DeleteMappingRequest, CodeData, keywords } from "@wso2/ballerina-core";
+import { DataMapperModelResponse, DMModel, Mapping, repairCodeRequest, SourceFile, ImportInfo, ProcessMappingParametersRequest, Command, MetadataWithAttachments, InlineMappingsSourceResult, ProcessContextTypeCreationRequest, ProjectImports, ImportStatements, GetModuleDirParams, TextEdit, DataMapperSourceRequest, AllDataMapperSourceRequest, DataMapperModelRequest, DeleteMappingRequest, CodeData, keywords } from "@wso2/ballerina-core";
 import { getDataMappingPrompt } from "./prompts/mapping-prompt";
 import { getBallerinaCodeRepairPrompt } from "./prompts/repair-prompt";
 import { CopilotEventHandler, createWebviewEventHandler, updateAndSaveChat } from "../utils/events";
@@ -1152,24 +1152,37 @@ export async function generateContextTypes(typeCreationRequest: ProcessContextTy
 
 // Opens the AI panel with data mapper chat interface
 export async function openChatWindowWithCommand(): Promise<void> {
-    const langClient = StateMachine.langClient();
     const context = StateMachine.context();
-    const model = await generateDataMapperModel({}, langClient, context);
+    const { identifier, documentUri } = context;
 
-    const { identifier, dataMapperMetadata } = context;
-    const mappingsModel = model.mappingsModel as DMModel;
+    let args: string | undefined;
+    const hiddenParts: string[] = [];
+    if (documentUri) { hiddenParts.push(`File: ${documentUri}`); }
 
-    // Automatically close and open AI mapping chat window with the generated model
+    if (identifier) {
+        args = identifier;
+        hiddenParts.push(`Mode: function`);
+        hiddenParts.push(`Function: ${identifier}`);
+    } else {
+        try {
+            const langClient = StateMachine.langClient();
+            const model = await generateDataMapperModel({}, langClient, context);
+            const output = (model.mappingsModel as DMModel)?.output;
+            const outputType = output?.typeName ?? output?.name;
+            if (outputType) { args = outputType; }
+        } catch {
+            // best-effort: open the chat without args if model extraction fails
+        }
+        hiddenParts.push(`Mode: inline`);
+    }
+
     commands.executeCommand(CLOSE_AI_PANEL_COMMAND);
     openAIPanelWithPrompt({
-        type: 'command-template',
-        command: Command.DataMap,
-        templateId: identifier ? TemplateId.MappingsForFunction : TemplateId.InlineMappings,
-        ...(identifier && { params: { functionName: identifier } }),
-        metadata: {
-            ...dataMapperMetadata,
-            mappingsModel: mappingsModel
-        }
+        type: 'skill',
+        skillId: 'data-map',
+        skillName: 'data-map',
+        ...(args && { args }),
+        ...(hiddenParts.length > 0 && { hiddenContext: hiddenParts.join('\n') }),
     });
 }
 

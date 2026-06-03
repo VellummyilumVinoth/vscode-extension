@@ -20,7 +20,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import {
     SourceFile,
-    MappingParameters,
     LLMDiagnostics,
     DiagnosticEntry,
     AIPanelPrompt,
@@ -37,7 +36,6 @@ import {
     WebToolToggle,
     LoginMethod,
     RunningServiceInfo,
-    ExtendedDataMapperMetadata,
 } from "@wso2/ballerina-core";
 
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
@@ -1277,7 +1275,10 @@ const AIChat: React.FC = () => {
         } else if ("text" in parsedInput && !("command" in parsedInput)) {
             if (metadata?.selectedSkillId) {
                 const existing = hiddenContextRef.current ? `${hiddenContextRef.current}\n` : "";
-                hiddenContextRef.current = `${existing}The user has explicitly selected the "${metadata.selectedSkillId}" skill. You MUST call invoke_skill with skillName="${metadata.selectedSkillId}" as your FIRST action before doing anything else.`;
+                const argsClause = metadata.selectedSkillArgs
+                    ? ` and args="${metadata.selectedSkillArgs}"`
+                    : '';
+                hiddenContextRef.current = `${existing}The user has explicitly selected the "${metadata.selectedSkillId}" skill. You MUST call invoke_skill with skillName="${metadata.selectedSkillId}"${argsClause} as your FIRST action before doing anything else.`;
             }
             await processAgentGeneration(parsedInput.text, attachments);
         } else if ("command" in parsedInput) {
@@ -1319,47 +1320,6 @@ const AIChat: React.FC = () => {
                             );
                             await processAgentGeneration(
                                 useCase, attachments, "CODE_FOR_USER_REQUIREMENT"
-                            );
-                            break;
-                    }
-                    break;
-                }
-                case Command.DataMap: {
-                    switch (parsedInput.templateId) {
-                        case "mappings-for-records":
-                            // TODO: Update this to use the LS API for validating function names
-                            const invalidPattern = /[<>\/\(\)\{\}\[\]\\!@#$%^&*+=|;:'",.?`~]/;
-                            if (invalidPattern.test(parsedInput.placeholderValues.functionName)) {
-                                throw new Error("Please provide a valid function name without special characters.");
-                            }
-
-                            await processMappingParameters(
-                                {
-                                    inputRecord: parsedInput.placeholderValues.inputRecords
-                                        .split(",")
-                                        .map((item) => item.trim()),
-                                    outputRecord: parsedInput.placeholderValues.outputRecord,
-                                    functionName: parsedInput.placeholderValues.functionName,
-                                },
-                                metadata as ExtendedDataMapperMetadata,
-                                attachments
-                            );
-                            break;
-                        case "mappings-for-function":
-                            await processMappingParameters(
-                                {
-                                    inputRecord: [],
-                                    outputRecord: "",
-                                    functionName: parsedInput.placeholderValues.functionName,
-                                },
-                                metadata as ExtendedDataMapperMetadata,
-                                attachments
-                            );
-                            break;
-                        case "inline-mappings":
-                            await processInlineMappingParameters(
-                                metadata as ExtendedDataMapperMetadata,
-                                attachments
                             );
                             break;
                     }
@@ -1496,28 +1456,6 @@ const AIChat: React.FC = () => {
                 throw new Error(errorMessage);
             }
         }
-    }
-
-    async function processMappingParameters(
-        parameters: MappingParameters,
-        metadata?: ExtendedDataMapperMetadata,
-        attachments?: Attachment[]
-    ) {
-        await rpcClient.getAiPanelRpcClient().generateMappingCode({
-            parameters,
-            metadata,
-            attachments
-        });
-    }
-
-    async function processInlineMappingParameters(
-        metadata: ExtendedDataMapperMetadata,
-        attachments?: Attachment[]
-    ) {
-        await rpcClient.getAiPanelRpcClient().generateInlineMappingCode({
-            metadata,
-            attachments
-        });
     }
 
     async function processContextTypeCreation(attachments: Attachment[]) {

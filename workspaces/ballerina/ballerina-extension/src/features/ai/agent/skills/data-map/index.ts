@@ -39,4 +39,6 @@ export const dataMapSkill: Skill = {
     name,
     trigger: description,
     content: getDataMappingSkillContent(DIAGNOSTICS_TOOL_NAME),
+    optional: false,
+    default: true,
 };
