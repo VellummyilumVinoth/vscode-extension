@@ -618,15 +618,28 @@ export function LibraryOverview({ projectStructure, isNPSupported, projectPath, 
         [showNaturalFunctions]
     );
 
+    const dataMapperPaths = useMemo(() => {
+        return new Set(
+            (dirMap[DIRECTORY_MAP.DATA_MAPPER] ?? []).map(
+                (dm) => `${dm.path}:${dm.position?.startLine}`
+            )
+        );
+    }, [dirMap]);
+
     const sectionsWithItems = useMemo(() => {
         return visibleSections.map((section) => {
-            const allItems: ProjectStructureArtifactResponse[] = dirMap[section.key] ?? [];
+            let allItems: ProjectStructureArtifactResponse[] = dirMap[section.key] ?? [];
+            if (section.key === DIRECTORY_MAP.FUNCTION) {
+                allItems = allItems.filter(
+                    (item) => !dataMapperPaths.has(`${item.path}:${item.position?.startLine}`)
+                );
+            }
             const filteredItems = isOverviewSearching
                 ? allItems.filter((item) => item.name.toLowerCase().includes(overviewQuery))
                 : allItems;
             return { section, allItems, filteredItems };
         });
-    }, [dirMap, visibleSections, overviewQuery, isOverviewSearching]);
+    }, [dirMap, visibleSections, overviewQuery, isOverviewSearching, dataMapperPaths]);
 
     const isLibraryEmpty = useMemo(
         () => visibleSections.every((s) => (dirMap[s.key] ?? []).length === 0),
@@ -698,6 +711,33 @@ export function LibraryOverview({ projectStructure, isNPSupported, projectPath, 
             rpcClient.getVisualizerRpcClient().openView({
                 type: EVENT_TYPE.OPEN_VIEW,
                 location: { view: MACHINE_VIEW.TypeDiagram, documentUri: item.path, position: item.position },
+            });
+        } else if (key === DIRECTORY_MAP.DATA_MAPPER) {
+            rpcClient.getVisualizerRpcClient().openView({
+                type: EVENT_TYPE.OPEN_VIEW,
+                location: {
+                    view: MACHINE_VIEW.DataMapper,
+                    documentUri: item.path,
+                    position: item.position,
+                    identifier: item.name,
+                    artifactType: DIRECTORY_MAP.DATA_MAPPER,
+                    dataMapperMetadata: {
+                        name: item.name,
+                        codeData: {
+                            lineRange: {
+                                fileName: item.path,
+                                startLine: {
+                                    line: item.position.startLine,
+                                    offset: item.position.startColumn,
+                                },
+                                endLine: {
+                                    line: item.position.endLine,
+                                    offset: item.position.endColumn,
+                                },
+                            },
+                        },
+                    },
+                },
             });
         } else if (key === DIRECTORY_MAP.CONFIGURABLE) {
             rpcClient.getVisualizerRpcClient().openView({
